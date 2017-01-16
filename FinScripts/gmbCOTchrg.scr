@@ -1,0 +1,293 @@
+<--start
+trace on
+#---------------------------------------------------------------------------
+# Source File           : gmbCOTchrg.scr
+# Author                : Alpha - plu Technologies & Services Ltd
+# Date                  : 27-06-2016
+# Remarks               : COT Monthly Charge Collection
+# Calling Scripts       : BATCH JOB
+# Associated DBObjects  :
+# Bank                  : FIRST BANK OF NIGERIA(GAMBIA)
+#--------------------------------------------------------------------------
+
+sv_r = urhk_MTTS_PopulateInputDetails("")
+sv_t = "COT Transaction "
+# CAUTION : Dont reassign sv_t 
+MTT.TranDetails.TranDate="0"
+MTT.TranDetails.TranType="T"
+MTT.TranDetails.TranSubType="BI"
+MTT.TranDetails.Consolidate="N"
+MTT.TranDetails.IgnoreExcp = "I"
+
+
+sv_r = urhk_MTTS_DefineTransaction(sv_t)
+sv_r = REPEXISTS("STDWFS")
+if (sv_r != 1) then
+        CREATEREP("STDWFS")
+endif
+
+sv_d = CLASSEXISTS("STDWFS", "INPUTPARAM")
+if (sv_d == 0) then
+        CREATECLASS("STDWFS", "INPUTPARAM", 5)
+endif
+
+
+ sv_k = CLASSEXISTS("STDWFS", "GLBDATA")
+if (sv_k == 0) then
+        CREATECLASS("STDWFS", "GLBDATA", 5)
+endif
+sv_r = REPEXISTS("FBN")
+if (sv_r != 1) then
+	CREATEREP("FBN")
+endif
+sv_r = CLASSEXISTS("FBN","COT")
+if (sv_r != 1) then
+	CREATECLASS("FBN","COT",5)
+endif
+FBN.COT.boddate= mid$(BANCS.STDIN.BODDate,0,10)
+FBN.COT.bankId=BANCS.STDIN.contextBankId
+FBN.COT.vsol=BANCS.STDIN.mySolId
+#-------------------------------------------
+#Mark that Batch Job Executed For Today
+#-------------------------------------------
+sv_s = "Insert into custom.COTBATCH_TBL values('COTCH','"+FBN.COT.vsol+"',to_date('"+FBN.COT.boddate+"','dd-mm-yyyy'),'N','"+FBN.COT.bankId+"')"
+print(sv_s)
+sv_r = urhk_dbSQL(sv_s)
+if (sv_r != 0) then
+  goto End
+else
+  sv_r = urhk_dbSQL("commit")
+endif
+
+#Retrieve Accrued Amounts For Each of The Eligible Accounts
+
+ sv_s = "acctNo,vAmt|Select FORACID,SUM(ACCU_AMT) from custom.COTACCU_TBL " 
+ #sv_s = sv_s + " Where ACCU_DATE between add_months(to_date('"+FBN.COT.boddate+"','dd-mm-yyyy'),-1)+1 and to_date('"+FBN.COT.boddate+"','dd-mm-yyyy') "
+ sv_s = sv_s + " Where substr(to_char(to_date(ACCU_DATE,'dd-mm-yyyy'),'DD-MON-YY'),1,2)=substr(to_char(to_date('"+FBN.COT.boddate+"','dd-mm-yyyy'),'DD-MON-YY'),1,2)"		
+ sv_s = sv_s + " And SOL_ID = '"+ FBN.COT.vsol +"'"
+ sv_s = sv_s + " And CHRG_FLG = 'N'"
+ sv_s = sv_s + " And bank_id='"+BANCS.STDIN.contextBankId+"' group by foracid "
+ print(sv_s)
+   sv_c = urhk_dbCursorOpen(sv_s)
+   print(sv_c) 
+		IF (sv_c != 0) THEN
+		#{  
+		   Goto Finish
+		#}
+		EndIf		
+		B2KTEMP.TEMPSTD.CursorPointer = BANCS.OUTPARAM.DB_CURSOR_NUMBER 
+		print(B2KTEMP.TEMPSTD.CursorPointer)
+		sv_d = urhk_dbCursorFetch(B2KTEMP.TEMPSTD.CursorPointer)
+		FBN.COT.fetchAcct = sv_d
+		print(FBN.COT.fetchAcct)
+
+		WHILE (FBN.COT.fetchAcct == 0)
+		#{
+			FBN.COT.acctNo = BANCS.OUTPARAM.acctNo 
+			FBN.COT.vAmt = BANCS.OUTPARAM.vAmt 
+
+#Get the Account Currency
+		sv_s = "vcrncy|Select acct_crncy_code from tbaadm.GAM where foracid='"+FBN.COT.acctNo+"'"
+		sv_s = sv_s + " AND BANK_ID = '"+ BANCS.STDIN.contextBankId +"' "
+		print(sv_s)
+		sv_r = urhk_dbSelect(sv_s)
+		if (sv_r != 0) then
+			Goto NextRec
+		endif
+		FBN.COT.crncy = BANCS.OUTPARAM.vcrncy 
+############################## 
+#Retrieve PTTM VAT Percentage
+##############################  
+	
+   sv_s = "fvat|Select a.AMT_PCNT from tbaadm.ptt p,tbaadm.adm a "
+   sv_s = sv_s + " where p.AMT_DERV_SRL_NUM =a.AMT_DRV_SRL_NUM "
+   sv_s = sv_s + " And   event_type='LNKED' "
+   sv_s = sv_s + " And   p.event_id ='VALUE_ADDED_TAX' "
+   sv_s = sv_s + " And   a.bank_id ='" + BANCS.STDIN.contextBankId + "' "
+   sv_s = sv_s + " And   p.bank_id ='" + BANCS.STDIN.contextBankId + "' "
+   print(sv_s)
+   sv_d = urhk_dbSelect(sv_s)
+   if (sv_d != "0") then
+   #{
+      Goto NextRec
+   #}
+   endif	
+   FBN.COT.fvat = BANCS.OUTPARAM.fvat
+   print(FBN.COT.fvat)
+   
+#Calculate VAT Amount
+   sv_v = CDOUBLE(FBN.COT.fvat)/100
+   print(sv_v)
+   FBN.COT.vat = CDOUBLE(FBN.COT.vAmt) * sv_v
+   print(FBN.COT.vat)
+   
+#-----------------------------
+#-Get VAT Internal Acct For DR
+#-----------------------------
+sv_o = "acctId|select foracid from tbaadm.gam"
+sv_o = sv_o + " where  sol_id ='"+FBN.COT.vsol+"'"
+sv_o = sv_o + " and  bacid   = 'WHT_PYB_INT'"
+sv_o = sv_o + " and  acct_crncy_code ='"+FBN.COT.crncy+"'"
+sv_o = sv_o + " and acct_cls_flg != 'Y' "
+sv_o = sv_o + " and del_flg != 'Y' "
+sv_o = sv_o + " AND BANK_ID = '"+ BANCS.STDIN.contextBankId +"' "
+print(sv_o)
+sv_s = urhk_dbSelect(sv_o)
+print(sv_s)
+if (sv_s != 0) then
+    Goto Finish
+else
+    FBN.COT.vatAcct = BANCS.OUTPARAM.acctId
+    print(FBN.COT.vatAcct)
+endif
+#---------------------------
+#-Get Internal Acct For DR
+#--------------------------
+sv_o = "acctId|select foracid from tbaadm.gam"
+sv_o = sv_o + " where  sol_id ='"+FBN.COT.vsol+"'"
+sv_o = sv_o + " and  bacid   = 'COMM_REC'"
+sv_o = sv_o + " and  acct_crncy_code ='"+FBN.COT.crncy+"'"
+sv_o = sv_o + " and acct_cls_flg != 'Y' "
+sv_o = sv_o + " and del_flg != 'Y' "
+sv_o = sv_o + " AND BANK_ID = '"+ BANCS.STDIN.contextBankId +"' "
+print(sv_o)
+sv_s = urhk_dbSelect(sv_o)
+print(sv_s)
+if (sv_s != 0) then
+    Goto Finish
+else
+    FBN.COT.suspAcct = BANCS.OUTPARAM.acctId
+    print(FBN.COT.suspAcct)
+endif
+
+#== Transaction Amount ====#
+
+sv_w = FBN.COT.vAmt
+sv_j = 0.01
+BANCS.INPARAM.InputAmount =sv_w
+print(BANCS.INPARAM.InputAmount)
+BANCS.INPARAM.RoundOffAmt = sv_j
+print(BANCS.INPARAM.RoundOffAmt)
+BANCS.INPARAM.RoundOffFlag = "H"
+sv_i = urhk_B2k_RoundOff ("")
+sv_w =CDOUBLE(BANCS.OUTPARAM.OutputAmount)
+print(BANCS.OUTPARAM.OutputAmount)
+print(sv_w)
+
+################################################################################
+TRANdtls:
+sv_h="Applied COT Charge"
+MTT.PartTranDetails.RefAmount  = -1 * sv_w
+print(MTT.PartTranDetails.RefAmount)
+MTT.PartTranDetails.Account= FBN.COT.acctNo
+MTT.PartTranDetails.ValueDate="0"
+MTT.PartTranDetails.RefCurrency = FBN.COT.crncy
+MTT.PartTranDetails.Consolidate="N"
+MTT.PartTranDetails.Particulars=sv_h
+MTT.PartTranDetails.TranIdentifier=sv_t
+MTT.PartTranDetails.PTranBusinessType=""
+sv_r = urhk_MTTS_DefinePartTran("FBN1")
+print(sv_r)
+
+sv_y="VAT on Applied COT Charge"
+MTT.PartTranDetails.RefAmount  = -1 * sv_v
+print(MTT.PartTranDetails.RefAmount)
+MTT.PartTranDetails.Account= FBN.COT.acctNo
+MTT.PartTranDetails.ValueDate="0"
+MTT.PartTranDetails.RefCurrency = FBN.COT.crncy
+MTT.PartTranDetails.Consolidate="N"
+MTT.PartTranDetails.Particulars=sv_y
+MTT.PartTranDetails.TranIdentifier=sv_t
+MTT.PartTranDetails.PTranBusinessType=""
+sv_r = urhk_MTTS_DefinePartTran("FBN2")
+print(sv_r)
+
+sv_h="Applied COT Charge:"+FBN.COT.acctNo
+#Credit Leg
+MTT.PartTranDetails.RefAmount = sv_w
+print(MTT.PartTranDetails.RefAmount)
+MTT.PartTranDetails.Account= FBN.COT.suspAcct
+#MTT.PartTranDetails.RateCode="NOR"
+MTT.PartTranDetails.ValueDate="0"
+#if (FBN.COT.crncy !="GMD") then
+#MTT.PartTranDetails.RefCurrency = FBN.COT.crncy
+#else
+MTT.PartTranDetails.RefCurrency = FBN.COT.crncy
+#endif
+MTT.PartTranDetails.Consolidate="N"
+MTT.PartTranDetails.Particulars=sv_h
+MTT.PartTranDetails.TranIdentifier=sv_t
+MTT.PartTranDetails.PTranBusinessType=""
+sv_h = urhk_MTTS_DefinePartTran("FBN3")
+print(sv_h)
+
+sv_f="VAT on COT Charge:"+FBN.COT.acctNo
+#VAT Credit Leg 
+MTT.PartTranDetails.RefAmount = sv_v
+print(MTT.PartTranDetails.RefAmount)
+MTT.PartTranDetails.Account= FBN.COT.vatAcct
+#MTT.PartTranDetails.RateCode="NOR"
+MTT.PartTranDetails.ValueDate="0"
+#if (FBN.COT.crncy !="GMD") then
+#MTT.PartTranDetails.RefCurrency = FBN.COT.crncy
+#else
+MTT.PartTranDetails.RefCurrency = FBN.COT.crncy
+#endif
+MTT.PartTranDetails.Consolidate="N"
+MTT.PartTranDetails.Particulars=sv_f
+MTT.PartTranDetails.TranIdentifier=sv_t
+MTT.PartTranDetails.PTranBusinessType=""
+sv_h = urhk_MTTS_DefinePartTran("FBN4")
+print(sv_h)
+
+sv_r = urhk_MTTS_EndDefinition("")
+print(sv_r)
+
+if (BANCS.OUTPARAM.MTTTranId ==" ") then
+   print("NO TRANSACTION")
+else
+print(BANCS.OUTPARAM.MTTTranId)
+#Persist Processed Record
+   sv_s = "Update custom.COTACCU_TBL set CHRG_FLG ='Y'"
+   sv_s = sv_s + "  Where FORACID ='"+FBN.COT.acctNo +"'"
+   #sv_s = sv_s + "  And ACCU_DATE between add_months(to_date('"+FBN.COT.boddate+"','dd-mm-yyyy'),-1)+1 and to_date('"+FBN.COT.boddate+"','dd-mm-yyyy') "
+   sv_s = sv_s + "  And substr(to_char(to_date(ACCU_DATE,'dd-mm-yyyy'),'DD-MON-YY'),1,2)=substr(to_char(to_date('"+FBN.COT.boddate+"','dd-mm-yyyy'),'DD-MON-YY'),1,2)"
+   print(sv_s)
+   sv_r = urhk_dbSQL(sv_s)
+   if (sv_r != 0) then
+	 Goto NextRec
+   else
+	 sv_r = urhk_dbSQL("commit")
+   endif
+   
+endif
+					NextRec:
+					sv_d = urhk_dbCursorFetch(B2KTEMP.TEMPSTD.CursorPointer)
+					FBN.COT.fetchAcct = sv_d
+					print(FBN.COT.fetchAcct)
+					if(FBN.COT.fetchAcct == 1) then
+					    goto End
+					endif
+			#}	
+			do
+			sv_a = urhk_dbCursorClose(B2KTEMP.TEMPSTD.CursorPointer)  
+
+End:
+#-------------------------------------------
+#Update Batch Job Executed Day Status
+#-------------------------------------------
+sv_s = "Update custom.COTBATCH_TBL set STATUS_FLG ='Y' "
+sv_s = sv_s + " Where to_char(to_date(JOBDATE,'dd-mm-yyyy'),'DD-MON-YY')=to_char(to_date('"+FBN.COT.boddate+"','dd-mm-yyyy'),'DD-MON-YY') "
+sv_s = sv_s + " And STATUS_FLG='N' And JOBID ='COTCH' And BANK_ID='"+FBN.COT.bankId+"' And SOL_ID='"+FBN.COT.vsol+"'"
+print(sv_s)
+sv_r = urhk_dbSQL(sv_s)
+if (sv_r != 0) then
+   goto Finish
+else
+	sv_r = urhk_dbSQL("commit")
+endif
+
+Finish:
+
+exitscript
+end-->

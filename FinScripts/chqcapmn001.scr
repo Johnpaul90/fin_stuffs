@@ -1,0 +1,290 @@
+<--start
+trace on
+#================================================================================
+# Script  name          : chqcapmn001.scr 
+# Date                  : 20 JAN 2012
+# Description           : This script is called on the click of Go button on criteria
+#                         page of CHQCAP menu option
+# Author                : Arije Abayomi
+# Calling Scripts       :
+# Called Scripts        :
+# Modification History :
+# < Version No.> <Date>  <Author Name>  <Description>
+#=================================================================================
+IF (REPEXISTS("CUST") == 0) THEN
+#{
+        CREATEREP("CUST")
+#}
+ENDIF
+
+IF (CLASSEXISTS("CUST", "CHQCAP") == 0) THEN
+#{
+        CREATECLASS("CUST", "CHQCAP", 5)
+#}
+ENDIF
+
+IF (BANCS.STDIN.languageCode == "INFENG") THEN
+#{
+        CUST.CHQCAP.ERR000001 = "Error while fetching the data.Database problem"
+        CUST.CHQCAP.ERR000002 = "Duplicate record exists"
+        CUST.CHQCAP.ERR000003 = "Record does not exist"
+        CUST.CHQCAP.ERR000004 = "Request Id Cannot Be Null"
+        CUST.CHQCAP.ERR000005 = "Request Id Should be 8 Characters"
+        CUST.CHQCAP.ERR000006 = "Account Is Frozen"
+        CUST.CHQCAP.ERR000007 = "Cheque Not Allowed For This Product"
+        CUST.CHQCAP.ERR000008 = "Request Id Should be 8 Characters"
+        CUST.CHQCAP.ERR000009 = "Indent does not exist"
+		CUST.CHQCAP.ERR000012 = "Invalid account no"
+        CUST.CHQCAP.ERR000013 = "Record already exist"
+        CUST.CHQCAP.ERR000014 = "No Record available for Deletion"
+        CUST.CHQCAP.ERR000015 = "Account has been closed"
+#}
+ENDIF
+IF (BANCS.STDIN.languageCode == "FRENCH") THEN
+#{
+        CUST.CHQCAP.ERR000001 = "Erreur en r\u00e9cup\u00e9rant la donn\u00e9e. Probl\u00e8me au niveau de la base de donn\u00e9es"
+        CUST.CHQCAP.ERR000002 = "enregistrement dupliqu\u00e9 existant"
+        CUST.CHQCAP.ERR000003 = "enregistrement inexistant"
+        CUST.CHQCAP.ERR000004 = "la r\u00e9f\u00e9rence de la requ\u00eate ne peut pas \u00eatre vide"
+        CUST.CHQCAP.ERR000005 = "la r\u00e9f\u00e9rence de la requ\u00eate devrait contenir 8 caract\u00e8res"
+        CUST.CHQCAP.ERR000006 = "compte gel\u00e9 ou surveill\u00e9"
+        CUST.CHQCAP.ERR000007 = "cheque non autoris\u00e9 pour ce produit"
+        CUST.CHQCAP.ERR000008 = "la r\u00e9f\u00e9rence de la requ\u00eate devrait contenir 8 caract\u00e8res"
+        CUST.CHQCAP.ERR000009 = "alin\u00e9a inexistant"
+		CUST.CHQCAP.ERR000012 = "num\u00e9ro de compte non valide"
+        CUST.CHQCAP.ERR000013 = "enregistrement d\u00e9j\u00e0 existant"
+        CUST.CHQCAP.ERR000014 = "aucun enregistrement disponible pour suppression"
+        CUST.CHQCAP.ERR000015 = "le compte a \u00e9t\u00e9 ferm\u00e9"
+#}
+ENDIF
+
+CUST.CHQCAP.solId = BANCS.STDIN.mySolId
+CUST.CHQCAP.funcCode = BANCS.INPUT.funcCode
+CUST.CHQCAP.acctNum = BANCS.INPUT.acctNum
+CUST.CHQCAP.reqNo = BANCS.INPUT.reqNo
+CUST.CHQCAP.userId = BANCS.STDIN.userId
+CUST.CHQCAP.bankId = BANCS.STDIN.contextBankId
+CUST.CHQCAP.boddate =mid$(BANCS.STDIN.BODDate,0,10)
+print(CUST.CHQCAP.funcCode)
+print(CUST.CHQCAP.acctNum)
+print(CUST.CHQCAP.reqNo)
+print(CUST.CHQCAP.boddate)
+if (CUST.CHQCAP.acctNum == "") then
+        Sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+        Sv_u = urhk_SetOrbOut("Error_1|ERR^" + CUST.CHQCAP.ERR000012 + "^acctNum")
+        GOTO FINISH
+endif
+################### NUBAN ################################
+sv_x = urhk_getAcctDetailsInRepository(CUST.CHQCAP.acctNum)
+print(sv_x)
+if (sv_x == "1") then
+	   BANCS.INPARAM.BINDVARS = CUST.CHQCAP.acctNum + "|" + CUST.CHQCAP.bankId
+           sv_x = "acct|select finacle_acct_num from custom.fbn_am "
+           sv_x = sv_x +" where old_acct_num =?SVAR and bank_id = ?SVAR"
+           print(sv_x)
+           sv_e = urhk_DbSelectWithBind(sv_x)
+           if (sv_e != "0") then
+                       Sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+                       Sv_u = urhk_SetOrbOut("Error_1|ERR^" + CUST.CHQCAP.ERR000012 + "^acctNum")
+                       GOTO FINISH
+           endif
+           CUST.CHQCAP.acctNum=BANCS.OUTPARAM.acct
+           sv_x = urhk_getAcctDetailsInRepository(CUST.CHQCAP.acctNum)
+endif
+sv_n = BANCS.OUTPARAM.acctName
+sv_n = CUST.CHQCAP.acctNum
+###################################################
+sv_b="'"
+sv_o= STRLEN (sv_n)
+sv_z=getposition (sv_n,sv_b)
+print(sv_z)
+if (sv_z > "0") then
+	sv_e = sv_z - 1
+
+	sv_u = LEFT$(sv_n,sv_e)
+	print(sv_u)
+
+	sv_w = MID$(sv_n,sv_z,sv_o)
+	print(sv_w)
+	sv_p = sv_u + sv_w
+	print(sv_p)
+	sv_n = sv_p
+	print(sv_n)
+endif
+#####################################################
+###################################################
+sv_b="&"
+sv_o= STRLEN (sv_n)
+sv_z=getposition (sv_n,sv_b)
+print(sv_z)
+if (sv_z > "0") then
+	sv_e = sv_z - 1
+
+	sv_u = LEFT$(sv_n,sv_e)
+	print(sv_u)
+
+	sv_w = MID$(sv_n,sv_z,sv_o)
+	print(sv_w)
+	sv_p = sv_u + sv_w
+	print(sv_p)
+	sv_n = sv_p
+	print(sv_n)
+endif
+#####################################################
+sv_b = BANCS.OUTPARAM.clearBalance
+sv_t = BANCS.OUTPARAM.acctSolId
+sv_x = BANCS.OUTPARAM.acctCloseflg
+sv_l = BANCS.OUTPARAM.schmCode
+sv_k = BANCS.OUTPARAM.schmType
+sv_j = BANCS.OUTPARAM.EffAvailableAmt
+###########################################################
+sv_c = CUST.CHQCAP.acctNum
+CUST.CHQCAP.CRNCY = BANCS.OUTPARAM.acctCrncyCode
+print(CUST.CHQCAP.CRNCY)
+CUST.CHQCAP.freezecode = BANCS.OUTPARAM.freezeCode
+print(CUST.CHQCAP.CRNCY)
+CUST.CHQCAP.schm = BANCS.OUTPARAM.schmCode
+print(CUST.CHQCAP.schm)
+print(sv_t)
+if (sv_x == "Y") then
+       Sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+       Sv_u = urhk_SetOrbOut("Error_1|ERR^" + CUST.CHQCAP.ERR000015 + "^acctNum")
+       GOTO FINISH
+endif
+if (CUST.CHQCAP.reqNo == "") then
+       Sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+       Sv_u = urhk_SetOrbOut("Error_1|ERR^" + CUST.CHQCAP.ERR000004 + "^reqNo")
+       GOTO FINISH
+endif
+sv_d=strlen(CUST.CHQCAP.reqNo)
+print(sv_d)
+if (sv_d != "8") then
+       sv_c = CUST.CHQCAP.acctNum
+sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+       Sv_u = urhk_SetOrbOut("Error_1|ERR^" + CUST.CHQCAP.ERR000005 + "^reqNo")
+       GOTO FINISH
+endif
+
+#if (sv_k == "SBA") then
+#       Sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+#       Sv_u = urhk_SetOrbOut("Error_1|ERR^" + CUST.CHQCAP.ERR000007 + "^acctNum")
+#       GOTO FINISH
+#endif
+
+if (CUST.CHQCAP.funcCode == "A") then
+    #BANCS.INPARAM.BINDVARS = sv_t + sv_c + CUST.CHQCAP.reqNo
+	#BANCS.INPARAM.BINDVARS = sv_t + sv_c + CUST.CHQCAP.reqNo 
+	BANCS.INPARAM.BINDVARS =  sv_c + CUST.CHQCAP.reqNo 
+     print(BANCS.INPARAM.BINDVARS)
+     sv_i = "count|select count(*) from icms.indents"
+     sv_i = sv_i + " where indent_id= ?SVAR and bank_id = '"+ BANCS.STDIN.contextBankId +"'"
+    #sv_i = sv_i + " where indent_id= ?SVAR"
+     print(sv_i)
+     sv_i = urhk_dbSelectWithBind(sv_i)
+     if (sv_i == "0") then
+           if (BANCS.OUTPARAM.count != "0") then
+                 Sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+                 Sv_u = urhk_SetOrbOut("Error_1|ERR^" + CUST.CHQCAP.ERR000013 + "^reqNo")
+                 GOTO FINISH
+           endif
+     endif
+endif
+
+if ((CUST.CHQCAP.freezecode == "D") or (CUST.CHQCAP.freezecode == "C") or (CUST.CHQCAP.freezecode == "T")) then
+         Sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+         Sv_u = urhk_SetOrbOut("Error_1|ERR^" + CUST.CHQCAP.ERR000006 + "^reqNo")
+         GOTO FINISH
+endif
+CUST.CHQCAP.schmCode = sv_l
+print(CUST.CHQCAP.schmCode)
+CUST.CHQCAP.schmType = sv_k
+print(CUST.CHQCAP.schmType)
+sv_d = urhk_getSchemeDetailsInRepository(sv_l)
+if (BANCS.OUTPARAM.SchmChequeAllowed =="N") then
+         Sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+         Sv_u = urhk_SetOrbOut("Error_1|ERR^" + CUST.CHQCAP.ERR000007 + "^reqNo")
+         GOTO FINISH
+endif
+#===Alpha =====
+#if ((CUST.CHQCAP.schmType == "SBA") And (CUST.CHQCAP.schmCode != "SP301") AND (CUST.CHQCAP.schmCode != "SP302") AND (CUST.CHQCAP.schmCode != "SP304") AND (CUST.CHQCAP.schmCode != "SP305") AND (CUST.CHQCAP.schmCode != "SP306"))Then
+         #Sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+         #Sv_u = urhk_SetOrbOut("Error_1|ERR^" + CUST.CHQCAP.ERR000007 + "^reqNo")
+         #GOTO FINISH
+#endif
+print(sv_t)
+print(sv_c)
+BANCS.INPARAM.BINDVARS = CUST.CHQCAP.acctNum + "|" + CUST.CHQCAP.bankId
+print(BANCS.INPARAM.BINDVARS)
+sv_i = "acctName|select ACCT_NAME from tbaadm.gam"
+sv_i = sv_i + " where foracid= ?SVAR and bank_id = ?SVAR"
+print(sv_i)
+sv_i = urhk_dbSelectWithBind(sv_i)
+if (sv_i == "0") then
+	CUST.CHQCAP.acctName=BANCS.OUTPARAM.acctName
+else
+	CUST.CHQCAP.acctName=CUST.CHQCAP.acctNum
+endif
+	
+	
+print(CUST.CHQCAP.reqNo)
+if (CUST.CHQCAP.funcCode == "A") then
+	Sv_u = urhk_SetOrbOut("SuccessOrFailure|Y")
+        Sv_u = urhk_setOrbOut("funcCode|" + CUST.CHQCAP.funcCode)
+        Sv_u = urhk_setOrbOut("acctNum|" + CUST.CHQCAP.acctNum)
+        Sv_u = urhk_setOrbOut("reqNo|" + CUST.CHQCAP.reqNo)
+        Sv_u = urhk_setOrbOut("cusName|" + CUST.CHQCAP.acctName)
+        Sv_u = urhk_setOrbOut("acctBal|" + sv_j)
+        Sv_u = urhk_setOrbOut("crncy|" + CUST.CHQCAP.CRNCY)
+        Sv_u = urhk_setOrbOut("origBr|" + CUST.CHQCAP.solId)
+        #Sv_u = urhk_setOrbOut("delBe|" + CUST.CHQCAP.acctName)
+        Sv_u = urhk_setOrbOut("orderDate|" + CUST.CHQCAP.boddate)
+        Sv_u = urhk_setOrbOut("receivedDate|" + CUST.CHQCAP.boddate)
+        #Sv_u = urhk_setOrbOut("chqType|" + CUST.CHQCAP.acctName)
+        #Sv_u = urhk_setOrbOut("numofLeaves|" + CUST.CHQCAP.acctName)
+	GOTO FINISH
+else
+	BANCS.INPARAM.BINDVARS = sv_c + CUST.CHQCAP.reqNo
+	sv_i = "tsol,dsol,orddate,rcvdate,chqtyp,desc,noleaves,appr,orig,mcrncy|select branchcode,delivery_branchcode,dateofrequest"
+	sv_i = sv_i + ",dateentered,chequetype,description,Numberofcheques,approved,originator, currency from icms.indents a,"
+	sv_i = sv_i + "icms.chequetype b where a.chequetype=b.type_id and a. indent_id= ?SVAR and a.bank_id = b.bank_id and a.bank_id = '"+ BANCS.STDIN.contextBankId +"' "
+	print(sv_i)
+	sv_i = urhk_dbSelectWithBind(sv_i)
+	print(sv_i)
+	if (sv_i =="1") then
+	      Sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+              Sv_u = urhk_SetOrbOut("Error_1|ERR^" + CUST.CHQCAP.ERR000007 + "^reqNo")
+              GOTO FINISH
+        endif
+        sv_v = BANCS.OUTPARAM.appr
+        sv_o = BANCS.OUTPARAM.orig
+        sv_h = BANCS.OUTPARAM.desc
+        CUST.CHQCAP.dsol = BANCS.OUTPARAM.dsol
+	CUST.CHQCAP.tsol = BANCS.OUTPARAM.tsol
+        CUST.CHQCAP.orddate = BANCS.OUTPARAM.orddate
+        CUST.CHQCAP.rcvdate = BANCS.OUTPARAM.rcvdate 
+        CUST.CHQCAP.chqtyp = BANCS.OUTPARAM.chqtyp + " " + sv_h
+        CUST.CHQCAP.noleaves = BANCS.OUTPARAM.noleaves
+        Sv_u = urhk_SetOrbOut("SuccessOrFailure|Y")
+        Sv_u = urhk_setOrbOut("funcCode|" + CUST.CHQCAP.funcCode)
+        Sv_u = urhk_setOrbOut("acctNum|" + CUST.CHQCAP.acctNum)
+        Sv_u = urhk_setOrbOut("reqNo|" + CUST.CHQCAP.reqNo)
+        Sv_u = urhk_setOrbOut("cusName|" + CUST.CHQCAP.acctName)
+        Sv_u = urhk_setOrbOut("acctBal|" + sv_b)
+        Sv_u = urhk_setOrbOut("crncy|" + CUST.CHQCAP.CRNCY)
+        Sv_u = urhk_setOrbOut("origBr|" + CUST.CHQCAP.tsol)
+        Sv_u = urhk_setOrbOut("delBr|" + CUST.CHQCAP.dsol)
+        Sv_u = urhk_setOrbOut("orderDate|" + CUST.CHQCAP.orddate)
+        Sv_u = urhk_setOrbOut("receivedDate|" + CUST.CHQCAP.rcvdate)
+        Sv_u = urhk_setOrbOut("chqType|" + CUST.CHQCAP.chqtyp)
+        Sv_u = urhk_setOrbOut("numofLeaves|" + CUST.CHQCAP.noleaves)
+        GOTO FINISH
+endif
+#}
+#----------------------------------------------------------------------------------
+# FINISH
+#----------------------------------------------------------------------------------
+FINISH:
+DELETECLASS("CUST", "CHQCAP")
+EXITSCRIPT
+trace off
+end-->

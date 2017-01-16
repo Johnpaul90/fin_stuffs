@@ -1,0 +1,142 @@
+<--START
+TRACE ON
+
+#---------------------------------------------------
+# Create the necessary repositories and classes
+#---------------------------------------------------
+
+IF (REPEXISTS("FBN") == 0 ) THEN
+#{
+	CREATEREP("FBN")
+#}
+ENDIF
+
+
+IF (CLASSEXISTS("FBN","DATA") == 0) THEN
+#{
+	CREATECLASS("FBN","DATA",5)
+#}
+ENDIF
+
+
+IF (FIELDEXISTS(BANCS.INPUT.userId) == 1) THEN
+
+#{
+
+	FBN.DATA.userId = BANCS.INPUT.userId
+
+#}
+
+ENDIF
+
+print(BANCS.STDIN.userId)
+
+IF(BANCS.INPUT.userId == BANCS.STDIN.userId)THEN
+#{
+     sv_z = urhk_SetOrbOut("SuccessOrFailure|N")
+     print(sv_z)
+     sv_z = urhk_SetOrbErr("Same User Cannot Reset")
+     print(sv_z)
+     Goto FINISH
+
+#}
+ENDIF
+
+
+#-------------------------
+#Validating input userid
+#-------------------------
+BANCS.INPARAM.BINDVARS = FBN.DATA.userId 
+sv_q = "count|select count(1) from SSOADM.USER_PROFILE_TBL  "
+sv_q = sv_q + " where user_id = ?SVAR and home_entity = '"+ BANCS.STDIN.contextBankId +"'"
+
+#BANCS.INPARAM.BINDVARS = FBN.DATA.userId 
+#print(BANCS.INPARAM.BINDVARS)
+
+sv_d = urhk_dbSelectWithBind(sv_q)
+print(sv_d)
+
+IF (BANCS.OUTPARAM.count == "0") THEN 
+#{
+         sv_z = urhk_SetOrbOut("SuccessOrFailure|N")
+         print(sv_z)
+         sv_z = urhk_SetOrbErr("Invalid User Id")
+         print(sv_z)
+	   	 Goto FINISH
+
+#}
+ELSE
+#{a
+	FBN.DATA.FLAG1="0"
+	FBN.DATA.FLAG2="0"
+
+	BANCS.INPARAM.BINDVARS=FBN.DATA.userId
+	sv_q = "DELETE FROM SSOADM.SSO_SESSION_TBL WHERE USER_ID=?SVAR"
+        print(sv_q)
+	sv_d = urhk_dbSqlWithBind(sv_q)
+	print(sv_d)
+
+	IF(sv_d != "0")THEN
+	#{
+		 PRINT("Unable to delete from SSOADM.SSO_SESSION_TBL")
+		 FBN.DATA.FLAG1="1"
+	#}
+	ENDIF
+
+	BANCS.INPARAM.BINDVARS=FBN.DATA.userId
+	sv_q = "DELETE FROM TBAADM.LGI WHERE USER_ID=?SVAR"
+        print(sv_q)
+	#BANCS.INPARAM.BINDVARS=FBN.DATA.userId
+
+	sv_d = urhk_dbSQLWithBind(sv_q)
+	print(sv_d)
+
+	IF(sv_d != "0")THEN
+	#{
+		PRINT("Unable to delete from TBAADM.LGI")
+		FBN.DATA.FLAG2 ="1"
+	#}
+	ENDIF
+
+	BANCS.INPARAM.BINDVARS=FBN.DATA.userId
+	sv_q = "UPDATE TBAADM.UPR SET USER_LOGGED_ON_FLG='N' WHERE  USER_ID=?SVAR and home_bank_id = '"+ BANCS.STDIN.contextBankId +"'"
+
+	sv_d = urhk_dbSQLWithBind(sv_q)
+	print(sv_d)
+
+	IF(sv_d != "0")THEN
+	#{
+		PRINT("Unable to UPDATE  TBAADM.UPR")
+	#}
+	ENDIF
+
+
+	IF((FBN.DATA.FLAG1 == "1")AND(FBN.DATA.FLAG2=="1"))THEN
+	#{
+		sv_z = urhk_SetOrbOut("SuccessOrFailure|N")
+		print(sv_z)
+		sv_z = urhk_SetOrbErr("Nothing to Reset")
+		print(sv_z)
+	#}
+	ENDIF
+
+	#sv_d = urhk_dbSQL("Commit")
+	#print(sv_d)
+
+	sv_i = "SuccessOrFailure|Y"
+	PRINT(sv_i)
+	sv_j = urhk_SetOrbOut(sv_i)
+	PRINT(sv_j)
+	sv_i = "RESULT_MSG|" + "User Reset Done Successfully"
+	PRINT(sv_i)
+	sv_j = urhk_SetOrbOut(sv_i)
+	PRINT(sv_j)
+
+#}
+ENDIF
+
+
+FINSIH:
+TRACE OFF
+EXITSCRIPT
+END-->

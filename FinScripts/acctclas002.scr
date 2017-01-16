@@ -1,0 +1,420 @@
+<--start
+trace on
+
+#=====================================
+#create a repository and a class
+#=====================================
+
+IF (REPEXISTS("CUST") == 0) THEN
+#{
+	CREATEREP("CUST")
+	#}
+ELSE
+	#{
+	DELETEREP("CUST")
+	CREATEREP("CUST")
+#}
+ENDIF
+
+IF (CLASSEXISTS("CUST", "CLS") == 0) THEN
+#{
+	CREATECLASS("CUST", "CLS", 5)
+	#}
+ELSE
+	#{
+	DELETECLASS("CUST", "CLS")
+	CREATECLASS("CUST", "CLS", 5)
+#}
+ENDIF
+print(BANCS.STDIN.mySolId)
+CUST.CLS.bodDate = MID$(BANCS.STDIN.BODDate,0,10)
+CUST.CLS.evnt = BANCS.INPUT.evnt
+print(CUST.CLS.evnt) 
+CUST.CLS.ERR00001= "No Record Available For Verification For User"
+
+IF (CUST.CLS.evnt == "Y") Then
+ 
+#==========================================
+# Cursor fetching the custom table details
+#==========================================
+sv_a = "acctId,glSubCode|select foracid,gl_subhead from custom.ACCT_CLASS_TBL where status='N'"
+sv_a = sv_a + " And VER_USER_ID ='"+BANCS.STDIN.userId+"' "
+print(sv_a)
+sv_b = urhk_dbCursorOpen(sv_a)
+print(sv_b)
+if (sv_b==0) then
+#{
+	sv_c = BANCS.OUTPARAM.DB_CURSOR_NUMBER
+	print(sv_c)
+	sv_d = urhk_dbCursorFetch(sv_c)
+	print(sv_d)
+	if (sv_d != 0) then
+	#{
+		print("No records available")
+                sv_s = urhk_SetOrbOut("SuccessOrFailure|N")
+                sv_z = urhk_SetOrbOut("Error_1|Error" + CUST.CLS.ERR00001 + "^funcCode")
+		GOTO End
+	#}
+	endif
+	
+	while(sv_d == 0)
+	#{
+		CUST.CLS.acctId = BANCS.OUTPARAM.acctId
+		CUST.CLS.glSubCode	= BANCS.OUTPARAM.glSubCode
+	        print(CUST.CLS.acctId)	
+	        print(CUST.CLS.glSubCode)	
+		sv_e = urhk_getAcctDetailsInRepository(CUST.CLS.acctId)
+		print(sv_e)
+		if (sv_e != 0) then
+		#{
+			print("Not a finacle account number")
+			CUST.CLS.recStatus = "NOT A FIN ACCT"
+			CUST.CLS.status    = "F"
+			BANCS.INPARAM.BINDVARS = CUST.CLS.status + "|" + CUST.CLS.recStatus + "|" + CUST.CLS.acctId + "|" + CUST.CLS.glSubCode
+			sv_z = "update custom.ACCT_CLASS_TBL set status = ?SVAR, statdesc = ?SVAR where FORACID = ?SVAR and gl_subhead  = ?SVAR"
+			print(sv_z)
+			sv_y = urhk_dbSQLWithBind(sv_z)
+			print(sv_y)
+			GOTO NEXTREC
+		#}
+		endif
+		CUST.CLS.acctSol = BANCS.OUTPARAM.acctSolId
+		if (CUST.CLS.acctSol != BANCS.STDIN.mySolId) then
+		#{
+			##Call HCCS service to change the context sol to acct sol
+			sv_f = urhk_SetUrhkInp("sol.solId|" + CUST.CLS.acctSol)
+            sv_g = urhk_ExecSrv("SRV_ModifyContextSol|retain_all_output = Y")
+            if (sv_g != 0) then
+            #{
+                		CUST.CLS.recStatus = "HCCS failed"
+				CUST.CLS.status    = "F"
+				BANCS.INPARAM.BINDVARS = CUST.CLS.status + "|" + CUST.CLS.recStatus + "|" + CUST.CLS.acctId + "|" + CUST.CLS.glSubCode
+				sv_z = "update custom.ACCT_CLASS_TBL set status = ?SVAR, statdesc = ?SVAR where FORACID = ?SVAR and gl_subhead = ?SVAR"
+				print(sv_z)
+				sv_y = urhk_dbSQLWithBind(sv_z)
+				print(sv_y)
+				GOTO NEXTREC
+            #}
+            endif
+		#}
+		endif
+		
+		##Inputs to HMAPD service
+		
+		sv_h = urhk_SetUrhkInp("critStruct.solSetId.setId|" + CUST.CLS.acctSol)
+		sv_h = urhk_SetUrhkInp("critStruct.acctNum.foracid|" + CUST.CLS.acctId)
+		sv_h = urhk_SetUrhkInp("critStruct.newGlSubHead.glSubHeadCode|" + CUST.CLS.glSubCode)
+		sv_h = urhk_SetUrhkInp("critStruct.pdXferDate|" + BANCS.STDIN.BODDate)
+		sv_h = urhk_SetUrhkInp("critStruct.menuFlg|M")
+		
+		sv_i = urhk_ExecSrv("SRV_FetchPastDueDtls|same_user_verify = Y|retain_all_output = Y|call_mode = E")
+		print(sv_i)
+		if (sv_i != 0) then
+		#{
+			CUST.CLS.status    = "F"
+			lv_c = BANCS.OUTPARAM.Error_num
+			PRINT(lv_c)
+			PRINT(BANCS.OUTPARAM.Fatal_num)
+			PRINT(BANCS.OUTPARAM.Error_num)
+			PRINT(BANCS.OUTPARAM.Warning_num)
+			PRINT(BANCS.OUTPARAM.UserInfo_num)
+			PRINT(BANCS.OUTPARAM.Xcpn_num)
+			lv_p = BANCS.OUTPARAM.Xcpn_num
+			PRINT(lv_p)
+			lv_d = 1
+			lv_q = 1
+			lv_e = ""
+			WHILE(lv_d <= lv_c)
+			#{
+					lv_f = FORMAT$(lv_d, "%d")
+					PRINT(lv_f)
+					lv_e = lv_e + ("BANCS").("OUTPARAM").("ErrorMesg_" + lv_f)
+					PRINT(lv_e)
+					lv_e = lv_e + " "
+					CUST.CLS.recStatus = lv_e
+					lv_d = lv_d + 1
+			#}
+			DO
+
+			WHILE(lv_q <= lv_p)
+			#{
+					lv_f = FORMAT$(lv_q, "%d")
+					PRINT(lv_f)
+					lv_e = lv_e + ("BANCS").("OUTPARAM").("XcpnDesc_" + lv_f)
+					PRINT(lv_e)
+					lv_e = lv_e + " "
+					CUST.CLS.recStatus = lv_e
+					lv_q = lv_q + 1
+			#}
+			DO
+			BANCS.INPARAM.BINDVARS = CUST.CLS.status + "|" + CUST.CLS.recStatus + "|" + CUST.CLS.acctId + "|" + CUST.CLS.glSubCode
+			sv_z = "update custom.ACCT_CLASS_TBL set status = ?SVAR, statdesc = ?SVAR where FORACID = ?SVAR and GL_SUBHEAD = ?SVAR"
+			print(sv_z)
+			sv_y = urhk_dbSQLWithBind(sv_z)
+			print(sv_y)
+			GOTO NEXTREC
+		#}
+		endif
+		
+		sv_j = urhk_CopyOutToIn("")
+		sv_k = urhk_ExecSrv("SRV_ProcessPastDueDtls|same_user_verify = Y|retain_all_output = Y|call_mode = E")
+		print(sv_k)
+		if(sv_k != 0) then
+		#{
+			CUST.CLS.status    = "F"
+			lv_c = BANCS.OUTPARAM.Error_num
+			PRINT(lv_c)
+			PRINT(BANCS.OUTPARAM.Fatal_num)
+			PRINT(BANCS.OUTPARAM.Error_num)
+			PRINT(BANCS.OUTPARAM.Warning_num)
+			PRINT(BANCS.OUTPARAM.UserInfo_num)
+			PRINT(BANCS.OUTPARAM.Xcpn_num)
+			lv_p = BANCS.OUTPARAM.Xcpn_num
+			PRINT(lv_p)
+			lv_d = 1
+			lv_q = 1
+			lv_e = ""
+			WHILE(lv_d <= lv_c)
+			#{
+					lv_f = FORMAT$(lv_d, "%d")
+					PRINT(lv_f)
+					lv_e = lv_e + ("BANCS").("OUTPARAM").("ErrorMesg_" + lv_f)
+					PRINT(lv_e)
+					lv_e = lv_e + " "
+					CUST.CLS.recStatus = lv_e
+					lv_d = lv_d + 1
+			#}
+			DO
+
+			WHILE(lv_q <= lv_p)
+			#{
+					lv_f = FORMAT$(lv_q, "%d")
+					PRINT(lv_f)
+					lv_e = lv_e + ("BANCS").("OUTPARAM").("XcpnDesc_" + lv_f)
+					PRINT(lv_e)
+					lv_e = lv_e + " "
+					CUST.CLS.recStatus = lv_e
+					lv_q = lv_q + 1
+			#}
+			DO
+			BANCS.INPARAM.BINDVARS = CUST.CLS.status + "|" + CUST.CLS.recStatus + "|" + CUST.CLS.acctId + "|" + CUST.CLS.glSubCode
+			sv_z = "update custom.ACCT_CLASS_TBL set status = ?SVAR, statdesc = ?SVAR where FORACID = ?SVAR and gl_subhead = ?SVAR"
+			print(sv_z)
+			sv_y = urhk_dbSQLWithBind(sv_z)
+			print(sv_y)
+			GOTO NEXTREC
+		#}
+		else
+		#{
+			CUST.CLS.recStatus = "HMAPD DONE"
+			CUST.CLS.status    = "S"
+BANCS.INPARAM.BINDVARS=CUST.CLS.status+"|"+CUST.CLS.recStatus+"|"+BANCS.STDIN.userId+"|"+CUST.CLS.bodDate+"|"+CUST.CLS.acctId+"|"+CUST.CLS.glSubCode
+			sv_z = "update custom.ACCT_CLASS_TBL set status = ?SVAR, statdesc = ?SVAR , VER_USER_ID= ?SVAR "
+                        sv_z = sv_z + " ,VER_DATE= ?SVAR where FORACID = ?SVAR and gl_subhead = ?SVAR "
+			print(sv_z)
+			sv_y = urhk_dbSQLWithBind(sv_z)
+			print(sv_y)
+			GOTO NEXTREC
+		#}
+		endif
+
+
+	NEXTREC:
+		print(sv_c)
+		print(sv_d)
+		sv_d = urhk_dbCursorFetch(sv_c)
+		print(sv_d)
+	#}
+	DO
+	sv_d = urhk_dbCursorClose(sv_c)
+	print(sv_d)
+	
+	sv_x = urhk_dbSql("COMMIT")
+	Goto End
+#}
+endif
+
+ENDIF
+
+#--This is for MEAC
+IF (CUST.CLS.evnt == "X") Then
+
+#==========================================
+# Cursor fetching the custom table details
+#==========================================
+sv_a = "srl,acctId,newMainClas,newSubClas|select SEQ_NUM,foracid,newMainClas,newSubClas "
+sv_a = sv_a + " from custom.ACCT_MEAC_TBL where status='N' and VER_USER_ID='"+BANCS.STDIN.userId+"' "
+print(sv_a)
+sv_b = urhk_dbCursorOpen(sv_a)
+print(sv_b)
+if (sv_b==0) then
+#{
+	sv_c = BANCS.OUTPARAM.DB_CURSOR_NUMBER
+	print(sv_c)
+	sv_d = urhk_dbCursorFetch(sv_c)
+	print(sv_d)
+	if (sv_d != 0) then
+	#{
+                print("No records available")
+                sv_s = urhk_SetOrbOut("SuccessOrFailure|N")
+                sv_z = urhk_SetOrbOut("Error_1|Error" + CUST.CLS.ERR00001 + "^funcCode")
+                GOTO End
+	#}
+	endif
+	
+	while(sv_d == 0)
+	#{
+		CUST.CLS.acctId = BANCS.OUTPARAM.acctId
+		CUST.CLS.newMainClas	= BANCS.OUTPARAM.newMainClas
+		CUST.CLS.newSubClas	= BANCS.OUTPARAM.newSubClas
+		CUST.CLS.srl		= BANCS.OUTPARAM.srl
+	        print(CUST.CLS.acctId)	
+	        print(CUST.CLS.newMainClas)	
+	        print(CUST.CLS.newSubClas)	
+	        print(CUST.CLS.srl)	
+
+#Get acid value
+  sv_s = "vacid|Select acid from TBAADM.GAM where foracid='"+CUST.CLS.acctId+"'" 
+  print(sv_s)
+  sv_v = urhk_dbSelect(sv_s)
+  print(sv_v)
+  IF (sv_v != 0) then
+    Goto mNext
+  Endif
+  CUST.CLS.vacid = BANCS.OUTPARAM.vacid
+
+#--Confirm existence 
+  sv_z = "rcnt|Select count(B2K_ID) from TBAADM.ACD where B2K_ID in ("
+  sv_z = sv_z + "Select acid from TBAADM.GAM where foracid='"+CUST.CLS.acctId+"' and rownum < 2)"
+  print(sv_z)
+  sv_y = urhk_dbSelect(sv_z)
+  print(sv_y)
+  IF (sv_y != 0) then
+    Goto mNext
+  Endif
+  CUST.CLS.rcnt = BANCS.OUTPARAM.rcnt
+
+ IF(CUST.CLS.rcnt =="1") THEN
+
+  sv_z = "mxSrl|Select max(SRL_NUM) from TBAADM.ACH where B2K_ID in ("
+  sv_z = sv_z + "Select acid from TBAADM.GAM where foracid='"+CUST.CLS.acctId+"')"
+  print(sv_z)
+  sv_y = urhk_dbSelect(sv_z)
+  print(sv_y)
+  IF (sv_y != 0) then
+    Goto mNext
+  Endif
+  CUST.CLS.mxSrl = BANCS.OUTPARAM.mxSrl
+#Update ACD
+     sv_h = "Update TBAADM.ACD set MAIN_CLASSIFICATION_USER='"+CUST.CLS.newMainClas+"'"
+     sv_h = sv_h + ",SUB_CLASSIFICATION_USER='"+CUST.CLS.newSubClas+"',ASSET_CONTROL_FLG='U',MAX_ACH_SRL_NUM='"+CUST.CLS.mxSrl+"'"
+     sv_h = sv_h + ",USER_CLASSIFICATION_DATE=sysdate,LCHG_USER_ID='"+BANCS.STDIN.userId+"'"
+     sv_h = sv_h + ",LCHG_TIME=sysdate,RCRE_USER_ID='"+BANCS.STDIN.userId+"'"
+     sv_h = sv_h + ",RCRE_TIME=sysdate "
+     sv_h = sv_h + " where B2K_ID in (Select acid from TBAADM.GAM where foracid='"+CUST.CLS.acctId+"' and rownum < 2)"
+     print(sv_h)
+     sv_y = urhk_dbSQL(sv_h)
+     print(sv_y)
+     IF(sv_y != 0) then
+       Goto mNext
+     Endif
+     sv_x = urhk_dbSQL("COMMIT")
+
+#Create a SEQeunce Number
+  #sv_s="seq|select custom.ACCTCLAS_SEQ.nextval from dual"
+  #sv_s=urhk_DBSelect(sv_s)
+  #print(sv_s)
+  #if(sv_s != "0") THEN
+    #Goto mNext
+  #endif
+  #CUST.CLS.seq=BANCS.OUTPARAM.seq
+  CUST.CLS.seq = cint(CUST.CLS.mxSrl) + 1 
+  if (cint(CUST.CLS.seq) < 10) then
+     CUST.CLS.seq = "0000"+ CUST.CLS.seq 
+  else
+     CUST.CLS.seq = "000"+ CUST.CLS.seq 
+  endif
+  print(CUST.CLS.seq)
+
+#--Release to History (ACH)
+     sv_h = "Insert into TBAADM.ACH Select B2K_TYPE,B2K_ID,'"+CUST.CLS.seq+"',MAIN_CLASSIFICATION_SYSTEM,SUB_CLASSIFICATION_SYSTEM,SYSTEM_CLASSIFICATION_DATE"
+     sv_h = sv_h + ",MAIN_CLASSIFICATION_USER,SUB_CLASSIFICATION_USER,USER_CLASSIFICATION_DATE,LCHG_USER_ID,LCHG_TIME,RCRE_USER_ID,RCRE_TIME,TS_CNT"
+     sv_h = sv_h + ",ASSET_CLS_REASON_CODE,TRG_ENTITY_TYPE,TRG_ENTITY_ID,BANK_ID,'U' "
+     #sv_h = sv_h + ",ASSET_CLS_REASON_CODE,TRG_ENTITY_TYPE,TRG_ENTITY_ID,BANK_ID,ASSET_CONTROL_FLG "
+     sv_h = sv_h + " From TBAADM.ACD where B2K_ID in (Select acid from TBAADM.GAM where foracid='"+CUST.CLS.acctId+"' and rownum < 2)"
+     print(sv_h)
+     sv_y = urhk_dbSQL(sv_h)
+     print(sv_y)
+     IF(sv_y != 0) then
+       Goto mNext
+     Endif
+     sv_x = urhk_dbSQL("COMMIT")
+     
+     #sv_e = "(B2K_TYPE, B2K_ID, SRL_NUM, MAIN_CLASSIFICATION_SYSTEM, SUB_CLASSIFICATION_SYSTEM, SYSTEM_CLASSIFICATION_DATE, MAIN_CLASSIFICATION_USER"
+     #sv_e = sv_e + " ,SUB_CLASSIFICATION_USER, USER_CLASSIFICATION_DATE, LCHG_USER_ID, LCHG_TIME, RCRE_USER_ID, RCRE_TIME, TS_CNT, BANK_ID, ASSET_CONTROL_FLG)"  
+
+ ELSE	 
+#Insert in TBAADM.ACD	 
+     sv_w = "(B2K_TYPE, B2K_ID, MAIN_CLASSIFICATION_SYSTEM, SUB_CLASSIFICATION_SYSTEM, SYSTEM_CLASSIFICATION_DATE, "
+     sv_w = sv_w + " MAIN_CLASSIFICATION_USER, SUB_CLASSIFICATION_USER, USER_CLASSIFICATION_DATE, LCHG_USER_ID, LCHG_TIME, RCRE_USER_ID,"  
+     sv_w = sv_w + " RCRE_TIME, TS_CNT, ENTITY_CRE_FLG, DEL_FLG,MAX_ACH_SRL_NUM,TRG_ENTITY_TYPE,PERCOLATE_FLG,BANK_ID,ASSET_CONTROL_FLG)"
+  
+     sv_e = "('ACCNT','"+CUST.CLS.vacid+"','001','001',TO_DATE('"+BANCS.STDIN.BODDate+"','MM/DD/YYYY HH24:MI:SS') "
+     sv_e = sv_e + ",'"+CUST.CLS.newMainClas+"','"+CUST.CLS.newSubClas+"',TO_DATE('"+BANCS.STDIN.BODDate+"','MM/DD/YYYY HH24:MI:SS') "
+     sv_e = sv_e + ",'"+BANCS.STDIN.userId+"',TO_DATE('"+BANCS.STDIN.BODDate+"','MM/DD/YYYY HH24:MI:SS'),'"+BANCS.STDIN.userId+"'"  
+     sv_e = sv_e + ",TO_DATE('"+BANCS.STDIN.BODDate+"','MM/DD/YYYY HH24:MI:SS'), 0,'','Y','N','"+CUST.CLS.seq+"','','','','"
+     sv_e = sv_e + BANCS.STDIN.contextBankId+"','S')"
+  
+     sv_a = "Insert into TBAADM.ACD "+sv_w+ " Values "+sv_e
+     print(sv_a)
+     sv_y = urhk_dbSQL(sv_a)
+     print(sv_y)
+     IF(sv_y != 0) then
+       Goto mNext
+     Endif	 
+     sv_x = urhk_dbSQL("COMMIT")
+
+     sv_a="update TBAADM.LAM set delinquency_reshdl_status='N' where acid in (Select "
+     sv_a= sv_a + " acid from TBAADM.GAM where foracid='"+CUST.CLS.acctId+"' and rownum < 2)" 	 
+     print(sv_a)
+     sv_y = urhk_dbSQL(sv_a)
+     print(sv_y)
+     IF(sv_y != 0) then
+       Goto mNext
+     Endif	 
+     sv_x = urhk_dbSQL("COMMIT")
+
+ ENDIF
+
+       sv_z = "update custom.ACCT_MEAC_TBL set status='Y',VER_DATE='"+CUST.CLS.bodDate+"',VER_USER_ID='"+BANCS.STDIN.userId+"' "
+       sv_z = sv_z + " where FORACID='"+CUST.CLS.acctId+"' and SEQ_NUM='"+CUST.CLS.srl+"'"
+       print(sv_z)
+       sv_y = urhk_dbSQL(sv_z)
+       print(sv_y)
+       if(sv_y =="0") then
+         sv_y = urhk_dbSQL("COMMIT")
+       endif
+	mNext:
+		print(sv_c)
+		print(sv_d)
+		sv_d = urhk_dbCursorFetch(sv_c)
+		print(sv_d)
+	#}
+	DO
+	sv_d = urhk_dbCursorClose(sv_c)
+	print(sv_d)
+#}
+endif
+
+ENDIF
+
+   CUST.CLS.vmsg= "Effective Asset Classification Successfully Verified.." 
+   sv_u = urhk_SetOrbOut("RESULT_MSG|"+CUST.CLS.vmsg)
+   sv_s = urhk_SetOrbOut("SuccessOrFailure|Y")
+
+
+End:
+exitscript
+
+trace off
+end-->

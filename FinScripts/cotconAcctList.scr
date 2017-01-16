@@ -1,0 +1,121 @@
+#----------------------------------------------------------------------------
+# Script Name       : cotconAcctList.scr
+# Author            : Louis C. (Alpha - Plus Technologies & Services Ltd.
+# Date              : 
+# Desc              : COT Account Concession Setup Menu
+# Called By         : custom menu
+# Bank              :
+# Menu Option       : COT 
+#--------------------------------------------------------------------------
+<--start
+trace on
+
+    IF (repexists("CUST") == 0) THEN
+    #{
+        CREATEREP("CUST")
+    #}
+    ENDIF
+    IF (classexists("CUST", "RPT") == 0) THEN
+    #{
+        CREATECLASS("CUST","RPT",5)
+    #}
+    ENDIF
+    sv_u = urhk_B2K_PrintRepos("BANCS")
+    IF (BANCS.STDIN.languageCode == "INFENG") THEN
+    #{
+        CUST.RPT.ERR000001 = "Error while fetching the data"
+    #}
+    ENDIF
+    CUST.RPT.funcCode = BANCS.INPUT.funcCode 
+    print(CUST.RPT.funcCode)
+    IF (CUST.RPT.funcCode =="A") THEN
+    #}
+       EXITSCRIPT
+    #}
+    ENDIF
+    print(BANCS.STDIN.mySolId)
+	sv_s = "count|"
+	sv_s = sv_s + " SELECT count(acct_num) from custom.CONCE_TBL "
+	sv_s = sv_s + " WHERE del_flg <> 'Y' AND bank_id = '" +BANCS.STDIN.contextBankId+"' And sol_id='"+BANCS.STDIN.mySolId+"'"
+      if(CUST.RPT.funcCode =="A")  then
+	sv_s = sv_s + " And ent_cre_flg = 'Y' "
+      endif
+      if((CUST.RPT.funcCode =="V") OR (CUST.RPT.funcCode =="M")) then
+	sv_s = sv_s + " And ent_cre_flg = 'N' "
+      endif
+      if(CUST.RPT.funcCode =="D") then
+	sv_s = sv_s + " And ent_cre_flg in ('Y','N') "
+      endif
+        print(sv_s)
+
+	sv_d =  urhk_dbSelect(sv_s)
+        print(sv_d)
+
+    IF(sv_d == 0) THEN
+    #{
+         CUST.RPT.count = BANCS.OUTPARAM.count
+         sv_c = "Count_" + "|" + CUST.RPT.count
+	 sv_u = urhk_SetOrbOut(sv_c)
+         print(sv_u)
+
+         sv_s = "acctno,vamt|"
+	 sv_s = sv_s + " SELECT acct_num,tran_amt from custom.CONCE_TBL "
+	 sv_s = sv_s + " WHERE del_flg <> 'Y' AND bank_id = '" +BANCS.STDIN.contextBankId+"' And sol_id='"+BANCS.STDIN.mySolId+"'"
+      if(CUST.RPT.funcCode =="A") then
+ 	 sv_s = sv_s + " And ent_cre_flg = 'Y' "
+      endif
+      if((CUST.RPT.funcCode =="V") OR (CUST.RPT.funcCode =="M")) then
+	 sv_s = sv_s + " And ent_cre_flg = 'N' "
+      endif
+      if(CUST.RPT.funcCode =="D") then
+	 sv_s = sv_s + " And ent_cre_flg in ('Y','N') "
+      endif
+      print(sv_s)
+	  sv_c = urhk_dbCursorOpen(sv_s)
+   	  print(sv_c)
+      IF(sv_c != 0) THEN
+	  #{
+		GOTO FINISH
+      #}
+	  ENDIF
+      IF(sv_c == 0) THEN
+	  #{
+		sv_y = 1	
+		CUST.RPT.CursorPointer = BANCS.OUTPARAM.DB_CURSOR_NUMBER
+		sv_z = urhk_dbCursorFetch(CUST.RPT.CursorPointer)
+		WHILE(sv_z == 0)
+			#{
+			  CUST.RPT.counter = sv_y
+			  CUST.RPT.acctNum = BANCS.OUTPARAM.acctno
+                          print(CUST.RPT.acctNum)
+			  CUST.RPT.vamt = BANCS.OUTPARAM.vamt
+                          print(CUST.RPT.vamt)
+
+			#===================================================
+			#Sending the datas to frontend
+			#===================================================	
+
+				sv_m = "acctNum_" + CUST.RPT.counter + "|" + CUST.RPT.acctNum
+				sv_n = "tamt_" + CUST.RPT.counter + "|" + CUST.RPT.vamt
+            	                Sv_z = urhk_SetOrbOut(sv_m)
+            	                Sv_z = urhk_SetOrbOut(sv_n)
+				sv_y = sv_y + 1
+
+				sv_z = urhk_dbCursorFetch(CUST.RPT.CursorPointer)
+		#}
+		DO
+		sv_c = urhk_dbCursorClose(CUST.RPT.CursorPointer)
+	#}
+	ELSE
+	#{
+		sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+        sv_u = urhk_SetOrbOut("Error_0|ERR^" + CUST.RPT.ERR000001 + "^funcCode")
+        GOTO FINISH
+	#}
+	ENDIF	
+
+	FINISH:
+
+trace off
+exitscript
+end-->

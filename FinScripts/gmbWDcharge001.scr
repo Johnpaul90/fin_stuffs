@@ -1,0 +1,166 @@
+<--START
+TRACE ON
+
+#---------------------------------------------------
+# Create the necessary repositories and classes
+#---------------------------------------------------
+
+IF (REPEXISTS("FBN") == 0 ) THEN
+#{
+	CREATEREP("FBN")
+#}
+ENDIF
+
+
+IF (CLASSEXISTS("FBN","GMB") == 0) THEN
+#{
+	CREATECLASS("FBN","GMB",5)
+#}
+ENDIF
+
+print(BANCS.STDIN.userId)
+FBN.GMB.msg = "Y"
+#-------------------------
+#Validating user Input
+#-------------------------
+FBN.GMB.acctNum = BANCS.INPUT.acctNum
+FBN.GMB.refAmt = CDOUBLE(BANCS.INPUT.refAmt)
+FBN.GMB.ccy = BANCS.INPUT.crncy
+print(FBN.GMB.ccy)
+print(FBN.GMB.refAmt)
+print(FBN.GMB.acctNum)
+
+sv_q = "cntRec|select count(schm_code) from tbaadm.gam where foracid='"+FBN.GMB.acctNum+"' "
+sv_q = sv_q + " and schm_code ='SA303' and bank_id='"+BANCS.STDIN.contextBankId+"'"
+print(sv_q)
+sv_d = urhk_dbSelect(sv_q)
+print(sv_d)
+if (sv_d != "0") then
+  FBN.GMB.msg = "Z/No_Charge/"
+  Goto Finish
+endif
+if (BANCS.OUTPARAM.cntRec == "0") then
+  FBN.GMB.msg = "Z/No_Charge/"
+  Goto Finish
+endif
+
+sv_q = "minBal|select ACCT_MIN_BALANCE from tbaadm.csp where bank_id='"+BANCS.STDIN.contextBankId+"' and schm_code in "
+sv_q = sv_q + " (select schm_code from tbaadm.gam where foracid='"+FBN.GMB.acctNum+"' "
+sv_q = sv_q + " and del_flg='N' and entity_cre_flg='Y' and bank_id='"+BANCS.STDIN.contextBankId+"') "
+print(sv_q)
+sv_d = urhk_dbSelect(sv_q)
+print(sv_d)
+if (sv_d == 0) then
+  FBN.GMB.minBal = CDOUBLE(BANCS.OUTPARAM.minBal)
+  print(FBN.GMB.minBal)
+else
+  FBN.GMB.msg = "Z/No_Charge/"
+  Goto Finish
+endif
+#-------------------------------
+#Get Effective Available Balance
+#-------------------------------
+sv_r = urhk_getAcctDetailsInRepository(FBN.GMB.acctNum)
+print(sv_r)
+if (sv_r == 0) then
+   FBN.GMB.availBal = BANCS.OUTPARAM.EffAvailableAmt
+   print(FBN.GMB.availBal)
+else
+   FBN.GMB.msg = "Z/No_Charge/"
+   Goto Finish
+endif
+
+#Check if the withdrawal amt will take 
+#effAvailable Balance lower than minBal of Acct Scheme
+
+FBN.GMB.balAmt = CDOUBLE(FBN.GMB.availBal) - CDOUBLE(FBN.GMB.refAmt)
+print(CDOUBLE(FBN.GMB.balAmt))
+print(CDOUBLE(FBN.GMB.minBal))
+
+IF(CDOUBLE(FBN.GMB.minBal) > CDOUBLE(FBN.GMB.balAmt) ) THEN 
+#{
+  Goto Apply
+
+Else
+
+  FBN.GMB.msg = "Z/No_Charge/"
+  Goto Finish
+Endif  
+
+
+Apply:
+#--Check to ensure that TrxnAmt + Charge Applied + Vat of Applied Charge < EffAvailable Amt
+
+#--Retrieve PTTM Percentage VAT Amount
+   sv_s = "fvat|Select a.AMT_PCNT from tbaadm.ptt p,tbaadm.adm a "
+   sv_s = sv_s + " where p.AMT_DERV_SRL_NUM =a.AMT_DRV_SRL_NUM "
+   sv_s = sv_s + " And   event_type='LNKED' "
+   sv_s = sv_s + " And   p.event_id ='VALUE_ADDED_TAX' "
+   sv_s = sv_s + " And   a.bank_id ='" + BANCS.STDIN.contextBankId + "' "
+   sv_s = sv_s + " And   p.bank_id ='" + BANCS.STDIN.contextBankId + "' "
+   print(sv_s)
+   sv_d = urhk_dbSelect(sv_s)
+   if (sv_d != "0") then
+   #{
+      FBN.GMB.msg = "Y/VAT_Amount_Not_Set/"
+      Goto Finish
+   #}
+   endif
+   FBN.GMB.fvat = BANCS.OUTPARAM.fvat
+   print(FBN.GMB.fvat)
+
+#--Retrieve PTTM Fixed Charge Amount
+   sv_s = "fchrg|Select a.FIXED_AMT from tbaadm.ptt p,tbaadm.adm a "
+   sv_s = sv_s + " where p.AMT_DERV_SRL_NUM =a.AMT_DRV_SRL_NUM "
+   sv_s = sv_s + " And   event_type='TRANF' "
+   sv_s = sv_s + " And   p.event_id ='MIN_BAL_CHRG' "
+   sv_s = sv_s + " And   a.bank_id ='" + BANCS.STDIN.contextBankId + "' "
+   sv_s = sv_s + " And   p.bank_id ='" + BANCS.STDIN.contextBankId + "' "
+   print(sv_s)
+   sv_d = urhk_dbSelect(sv_s)
+   if (sv_d != "0") then
+   #{
+      FBN.GMB.fchrg = "50.00"
+      Goto Finish
+   #}
+   endif
+   FBN.GMB.fchrg = BANCS.OUTPARAM.fchrg
+   print(FBN.GMB.fchrg)
+
+#-- VAT calculation and Total Amount to charge customer account
+
+   sv_v = CDOUBLE(FBN.GMB.fvat)/100
+   print(sv_v)
+   FBN.GMB.vat = CDOUBLE(FBN.GMB.fchrg) * sv_v
+   print(FBN.GMB.vat)
+   FBN.GMB.vtotal = CDOUBLE(FBN.GMB.refAmt) + CDOUBLE(FBN.GMB.fchrg) + CDOUBLE(FBN.GMB.vat) 
+   print(FBN.GMB.vtotal)
+   print(FBN.GMB.availBal)
+#--Check if Total Charge Amt to be Applied is > EffAvailable Balance
+ 
+IF (CDOUBLE(FBN.GMB.availBal) < FBN.GMB.vtotal ) THEN
+#{
+  FBN.GMB.msg = "N/Charge_Amount:"+FBN.GMB.fchrg+"_GMD/VAT_Amount:"+FBN.GMB.vat
+  Goto Finish
+Else
+  FBN.GMB.msg = "Y/Charge_Amount:"+FBN.GMB.fchrg+"_GMD/VAT_Amount:"+FBN.GMB.vat
+  Goto Finish
+Endif
+
+#-- Actual Charge Transaction on the response page   
+
+
+Finish:
+
+  sv_u = urhk_SetOrbOut("result|"+FBN.GMB.msg)
+  if(sv_u==0)then
+  #{
+     print("Success")
+  #}
+  endif
+
+
+EXITSCRIPT
+trace off
+
+END-->

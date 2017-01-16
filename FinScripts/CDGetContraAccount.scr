@@ -1,0 +1,659 @@
+#---------------------------------------------------------
+#Script name:CDGetContaAccount
+#Author: ADEBIMPE AYOOLA, LONGBRIDGE TECHNOLOGIES LIMITED
+#Date: 02-JUNE-2016
+#----------------------------------------------------------
+#This script is used to customize the contra account for
+#the transaction. It describes customizations for the
+#contra account to be credited for both ATM and POS
+#transactions and also the account to be debited.
+#----------------------------------------------------------
+<--START
+TRACE ON
+#GETTING CUSTOMER ACCOUNT NUMBER FOR REMOTE ON US TRANSACTIONS-----#
+#-----This is because GIM remote on us transactions doesnt send field 102 with d transaction---#
+#------only the card number is being sent, so we get the account number here!-----#
+#IF (BANCS.INPUT.Foracid == "00000101110101") then
+        #PRINT(BANCS.INPUT.CustCardId)
+        #sv_a = BANCS.INPUT.CustCardId
+        #sv_b = mid$(sv_a,12,4)
+        #print(sv_b)
+        #sv_u = "pan | select foracid from custom.cardrequests_hist where substr(PAN,13,4) = '" + sv_b +"'"
+        #sv_p = urhk_dbSelect(sv_u)
+        #if (sv_p == "0") then
+                #print("gotten")
+                #BANCS.INPUT.Foracid = BANCS.OUTPARAM.pan
+                #print(BANCS.INPUT.Foracid)
+		#BANCS.OUTPUT.Foracid = BANCS.INPUT.Foracid
+		#print(BANCS.OUTPUT.Foracid)
+        #else
+                #print("acctnum not found")
+                #BANCS.OUTPUT.RespCode="99"
+                #BANCS.OUTPUT.successOrFailure="F"
+                #exitscript
+        #endif
+#endif
+#-------------------------END getting customer acct number from card request history table----#
+#print(BANCS.OUTPUT.Foracid)
+	#############################################################
+        #To obtain solid and fetch new account
+        #if the Debit account sent in is the old one
+        #######################################################
+
+        IF (FIELDEXISTS(BANCS.INPUT.Foracid)) THEN
+        #{
+                sv_c = BANCS.INPUT.Foracid
+                PRINT(sv_c)
+                sv_v = "first|select sol_id from gam where foracid='" + BANCS.INPUT.Foracid + "'"
+                sv_f = urhk_dbSelect(sv_v)
+                IF (sv_f == "0") THEN
+                #{
+                        BANCS.OUTPUT.SolId = BANCS.OUTPARAM.first
+                        BANCS.INPUT.SolId = BANCS.OUTPUT.SolId
+                        PRINT(BANCS.OUTPUT.SolId)
+                        #}
+                ELSE
+                        #{
+                        PRINT("Old Account detected")
+                        sv_s = "first,origacc|select sol_id,foracid from tbaadm.gam where foracid=(select "
+                        sv_s = sv_s + "finacle_acct_num from custom.fbn_am where old_acct_num = '"
+                        sv_s = sv_s + BANCS.INPUT.Foracid + "')"
+                        sv_r =  urhk_dbSelectWithBind(sv_s)
+                        IF (sv_r == "0")THEN
+                        #{
+                                PRINT("Got Here Select Successful")
+                                BANCS.INPUT.Foracid = BANCS.OUTPARAM.origacc
+                                BANCS.OUTPUT.Foracid = BANCS.INPUT.Foracid
+                                PRINT(BANCS.INPUT.Foracid)
+                                PRINT(BANCS.OUTPUT.Foracid)
+                                BANCS.OUTPUT.SolId = BANCS.OUTPARAM.first
+                                BANCS.INPUT.SolId = BANCS.OUTPUT.SolId
+                                PRINT(BANCS.OUTPUT.SolId)
+                                #}
+                        ELSE
+                                #{
+                                BANCS.OUTPUT.RespCode="99"
+                                BANCS.OUTPUT.successOrFailure="F"
+                                EXITSCRIPT
+                        #}
+                        ENDIF
+                #}
+                ENDIF
+        #}
+        ENDIF
+        ########################################
+        #End fetching new account and solid
+        ########################################
+
+        ################################
+        #####To fetch for credit account
+        ################################
+
+        IF (FIELDEXISTS(BANCS.INPUT.CrForacid)) THEN
+        #{
+                IF (BANCS.INPUT.CrForacid != "") THEN
+                #{
+                        sv_c = BANCS.INPUT.CrForacid
+                        PRINT(sv_c)
+                        sv_k = "first|select sol_id from gam where foracid='" + BANCS.INPUT.CrForacid + "'"
+                        sv_y = urhk_dbSelect(sv_k)
+                        IF (sv_y == "0") THEN
+                        #{
+                                BANCS.OUTPUT.CrSolId = BANCS.OUTPARAM.first
+                                PRINT(BANCS.OUTPUT.CrSolId)
+                                #}
+                        ELSE
+                                #{
+                                PRINT("Old Account detected")
+                                sv_s = "first,origacc|select sol_id,foracid from tbaadm.gam where foracid=(select "
+                                sv_s = sv_s + "finacle_acct_num from custom.fbn_am where old_acct_num = '"
+                                sv_s = sv_s + BANCS.INPUT.CrForacid + "')"
+                                sv_r =  urhk_dbSelectWithBind(sv_s)
+                                IF (sv_r == "0")THEN
+                                #{
+                                        PRINT("Got Here Select Successful")
+                                        BANCS.INPUT.CrForacid = BANCS.OUTPARAM.origacc
+                                        BANCS.OUTPUT.CrForacid = BANCS.INPUT.CrForacid
+                                        PRINT(BANCS.INPUT.CrForacid)
+                                        PRINT(BANCS.OUTPUT.CrForacid)
+                                        BANCS.OUTPUT.CrSolId = BANCS.OUTPARAM.first
+                                        BANCS.INPUT.CrSolId = BANCS.OUTPUT.CrSolId
+                                        PRINT(BANCS.OUTPUT.CrSolId)
+                                        #}
+                                ELSE
+                                        #{
+                                        BANCS.OUTPUT.RespCode="99"
+                                        BANCS.OUTPUT.successOrFailure="F"
+                                        EXITSCRIPT
+                                #}
+                                ENDIF
+                        #}
+                        ENDIF
+                #}
+                ENDIF
+        #}
+        ENDIF
+
+        #################################
+        #End Account Obtain SolId
+        #################################
+        sv_l = BANCS.INPUT.DevType
+        PRINT(BANCS.INPUT.CustCardId)
+        PRINT(BANCS.INPUT.DevType)
+        sv_m=BANCS.INPUT.DccId
+        PRINT(sv_m)
+        PRINT(sv_l)
+        sv_a = BANCS.INPUT.CustCardId
+        sv_b = mid$(sv_a, 0, 6)
+
+IF ((sv_m == "FEP") OR (sv_m == "SWT") OR (sv_m == "BWY") OR (sv_m =="EMP") OR (sv_m == "CSC") OR (BANCS.INPUT.DccId == "FPX") OR  (BANCS.INPUT.DccId == "NIP")) THEN
+        #{
+       	PRINT(BANCS.INPUT.CardAcceptorName)
+        sv_l = STRLEN(BANCS.INPUT.CardAcceptorName)
+        sv_e = MID$(BANCS.INPUT.CardAcceptorName,(sv_l - 2),2)
+        PRINT(sv_e)
+        PRINT(BANCS.INPUT.TranCrncy)
+        PRINT(BANCS.INPUT.DeviceId)
+        sv_c = LTRIM(BANCS.INPUT.DeviceId,'0')
+        #sv_c = LTRIM(BANCS.INPUT.DeviceId,' ')
+		print(sv_c)
+        sv_r = MID$(sv_c,0,1)
+        sv_f = MID$(sv_c,0,4)
+        sv_g = MID$(sv_c,4,4)
+        sv_h = MID$(sv_c,0,4)
+        PRINT(sv_r)
+        PRINT(sv_f)
+        PRINT(sv_g)
+        sv_l = (BANCS.INPUT.DevType)
+        PRINT(BANCS.INPUT.CustCardId)
+        PRINT(BANCS.INPUT.DevType)
+        sv_m=BANCS.INPUT.DccId
+        PRINT(sv_m)
+        sv_a = BANCS.INPUT.CustCardId
+        sv_b = mid$(sv_a, 0, 6)
+        
+	###############################################
+        #THIS SECTION HANDLES  ALL TRANSFERS
+        #################################################
+        IF ((BANCS.INPUT.Command == "TRTR") OR (BANCS.INPUT.Command == "TRRR")) THEN
+               	IF (FIELDEXISTS(BANCS.INPUT.CrForacid)) THEN
+                       	BANCS.OUTPUT.contraAccount=BANCS.INPUT.CrForacid
+                        BANCS.OUTPUT.Foracid = BANCS.INPUT.Foracid
+                      	PRINT(BANCS.OUTPUT.contraAccount)
+                      	PRINT(BANCS.OUTPUT.Foracid)
+                        EXITSCRIPT
+              	#}
+                ENDIF
+       	#}
+        ENDIF
+
+	IF ((sv_m == "FEP") or (sv_m == "SWT")) THEN
+        ###############################################
+        #THIS SECTION HANDLES CASH WITHDRAWAL
+        #################################################
+        IF ((sv_b == "506186") AND (sv_f == "1FGM")) THEN
+              	IF (BANCS.INPUT.TranCrncy == "GMD") THEN
+                	#########################################
+                        ###FBN VERVE GAMBIA CARD (ON-US) CASH WITHDRAWAL
+                        #########################################
+                       	IF ((BANCS.INPUT.Command == "CWDR") OR (BANCS.INPUT.Command == "CWRR")) THEN
+                               	#{
+                                sv_k = "stermid,stermacct | select term_id, till_acct_no from tbaadm.terminal_table"
+				sv_k =  sv_k + " where term_id = '" + sv_c  + "' AND bank_id='06'"
+                                PRINT(sv_k)
+                                sv_z = urhk_DbSelect(sv_k)
+                                PRINT(sv_z)
+                                IF(sv_z == "0")THEN
+                               		 #{
+                                         BANCS.OUTPUT.contraAccount = BANCS.OUTPARAM.stermacct
+                                         PRINT(BANCS.OUTPUT.contraAccount)
+                               	#}
+                                ELSE
+                                         #{
+                                         BANCS.OUTPUT.RespCode="99"
+                                         BANCS.OUTPUT.successOrFailure="F"
+                                         EXITSCRIPT
+                                #}
+                                ENDIF
+
+                                BANCS.OUTPUT.Foracid = BANCS.INPUT.Foracid
+                                PRINT (BANCS.OUTPUT.Foracid)
+                                BANCS.OUTPUT.successOrFailure = "S"
+                                EXITSCRIPT
+                       	#}
+                        ENDIF
+                 #}
+                 ENDIF
+         #}
+         ENDIF
+
+        ##########THIS SECTION HANDLES NOT ON US TRANSACTIONS
+        IF ((sv_b != "506186") AND (sv_f == "1FGM")) THEN
+                         ####################################################################
+                         ##NOT - ON - US TRANSACTION
+                         ##debit  GAMSWITCH receivable suspense account provided
+                         ##credit ATM TILL account which would be selected from the database
+                         ####################################################################
+                         IF ((BANCS.INPUT.Command == "CWDR") OR (BANCS.INPUT.Command == "CWRR")) THEN
+                         	#{
+                               	sv_k = "stermid,stermacct | select term_id, till_acct_no from tbaadm.terminal_table"
+                               	sv_k =  sv_k + " where term_id = '" + sv_c  + "'"
+                                PRINT(sv_k)
+                                sv_z = urhk_DbSelect(sv_k)
+                                PRINT(sv_z)
+                                IF(sv_z == "0")THEN
+                                #{
+                                	BANCS.OUTPUT.contraAccount = BANCS.OUTPARAM.stermacct
+                                        PRINT(BANCS.OUTPUT.contraAccount)
+                                        BANCS.OUTPUT.Termid = BANCS.OUTPARAM.stermid
+                                        PRINT (BANCS.OUTPUT.Termid)
+                                       	sv_b =MID$(BANCS.OUTPUT.Termid, 4,3)
+                                        PRINT(sv_b)
+                                        #}
+                               	ELSE
+                                        #{
+                                        BANCS.OUTPUT.RespCode="99"
+                                        BANCS.OUTPUT.successOrFailure="F"
+                                        EXITSCRIPT
+                                       #}
+                                ENDIF
+				sv_q = MID$(sv_c,4,3)
+				print(sv_q)
+				sv_d =BANCS.OUTPUT.SolId
+                                BANCS.OUTPUT.Foracid = sv_k + "19400000101"
+				PRINT(BANCS.OUTPUT.Foracid)
+                                BANCS.OUTPUT.successOrFailure = "S"
+                                EXITSCRIPT
+                         #}
+                         ENDIF
+	ENDIF
+
+        ################################################
+        #FBN GAMBIA CARD ON ANOTHER MACHINE
+        #REMOTE ON US
+        ################################################
+        IF ((sv_f != "1FGM") AND (sv_b == "506186")) THEN
+        	#{
+                IF ((BANCS.INPUT.Command == "CWDR") OR (BANCS.INPUT.Command == "CWRR")) THEN
+               		#{
+			IF (BANCS.INPUT.TranCrncy == "GMD") THEN
+                        	#{
+                                ############################################################
+                                #REMOTE ON US
+                                #credit GIM ATM payable suspense account provided
+                                ############################################################
+        	                sv_d = BANCS.OUTPUT.Solid
+				BANCS.OUTPUT.FORACID=BANCS.INPUT.FORACID
+				BANCS.OUTPUT.contraAccount= sv_d + "34389003401"
+                                PRINT(BANCS.OUTPUT.Foracid)
+                                PRINT(BANCS.OUTPUT.contraAccount)
+                                BANCS.OUTPUT.successOrFailure = "S"
+                                EXITSCRIPT
+                       #}
+                       ENDIF
+                #}
+                ENDIF
+         #}
+         ENDIF
+
+        ########## THIS SECTION HANDLES ALL ATM PURCHASES########   
+	##########THIS SECTION HANDLES ATM ON US PURCHASE########
+        IF ((sv_b == "506186") AND (sv_f == "1FGM")) THEN
+        	#{
+                ####################################################################
+                ## ON - US PURCHASE
+                ##debit customer account 
+                ##credit ATM PURCHASE account provided
+                ####################################################################
+                IF ((BANCS.INPUT.Command == "PRCR")) THEN
+                	#{
+                        sv_d = BANCS.OUTPUT.Solid
+				BANCS.OUTPUT.FORACID=BANCS.INPUT.FORACID
+				BANCS.OUTPUT.contraAccount= sv_d + "34389003401"
+                                PRINT(BANCS.OUTPUT.Foracid)
+                                PRINT(BANCS.OUTPUT.contraAccount)
+                                BANCS.OUTPUT.successOrFailure = "S"
+                                EXITSCRIPT
+
+                        #}
+	        ENDIF
+               #}
+        ENDIF
+
+       ##########THIS SECTION HANDLES ATM NOT ON US PURCHASE########
+       IF ((sv_b != "506186") AND (sv_f == "1FGM")) THEN
+                #{
+                         ####################################################################
+                         ##NOT - ON - US PURCHASE
+                         ##debit  GAMSWITCH receivable account provided
+                         ##credit ATM PURCHASE account provided
+                         ####################################################################
+                         IF ((BANCS.INPUT.Command == "PRCR")) THEN
+                         	#{
+                                     sv_d = BANCS.OUTPUT.Solid
+				     BANCS.OUTPUT.FORACID=sv_d + "19400000101"
+                                     PRINT(BANCS.OUTPUT.Foracid)
+                                     BANCS.OUTPUT.contraAccount=sv_d + "19350000101"
+                                     PRINT(BANCS.OUTPUT.contraAccount)
+				     BANCS.OUTPUT.successOrFailure = "S"
+                                     EXITSCRIPT
+
+                                 #}
+	                ENDIF
+                  #}
+       ENDIF
+
+ 	##########THIS SECTION HANDLES ATM REMOTE ON US PURCHASE########
+       IF ((sv_f != "1FGM") AND (sv_b == "506186")) THEN
+                #{
+                         ####################################################################
+                         ##REMOTE - ON - US PURCHASE
+                         ##debit  Customers Account 
+                         ##credit GamSwitch Account Payable Account provided
+                         ####################################################################
+                         IF ((BANCS.INPUT.Command == "PRCR")) THEN
+                         	#{
+                                     sv_d = BANCS.OUTPUT.Solid
+				     BANCS.OUTPUT.FORACID=BANCS.INPUT.FORACID
+                                     PRINT(BANCS.OUTPUT.Foracid)
+                                     BANCS.OUTPUT.contraAccount=sv_d + "34389003401"
+                                     PRINT(BANCS.OUTPUT.contraAccount)
+				     BANCS.OUTPUT.successOrFailure = "S"
+                                     EXITSCRIPT
+
+                                 #}
+	                ENDIF
+                  #}
+       ENDIF
+
+##################################################################
+ ##########THIS SECTION HANDLES ATM PAYMENTS ####################
+##################################################################
+
+##########THIS SECTION HANDLES ATM ON US PAYMENTS ########
+        IF ((sv_b == "506186") AND (sv_f == "1FGM")) THEN
+        	#{
+                ####################################################################
+                ## ON - US PAYMENTS 
+                ##debit customer account 
+                ##creditATM Payment Account provided
+                ####################################################################
+                ##IF ((BANCS.INPUT.Command == "PRCR")) THEN
+                	#{
+                        sv_d = BANCS.OUTPUT.Solid
+				BANCS.OUTPUT.FORACID=BANCS.INPUT.FORACID
+				BANCS.OUTPUT.contraAccount= sv_d + "19350000101"
+                                PRINT(BANCS.OUTPUT.Foracid)
+                                PRINT(BANCS.OUTPUT.contraAccount)
+                                BANCS.OUTPUT.successOrFailure = "S"
+                                EXITSCRIPT
+
+                        #}
+	        ENDIF
+               #}
+        ENDIF
+
+       ##########THIS SECTION HANDLES ATM NOT ON US PAYMENTS ########
+       IF ((sv_b != "506186") AND (sv_f == "1FGM")) THEN
+                #{
+                         ####################################################################
+                         ##NOT - ON - US PAYMENTS 
+                         ##debit  GAMSWITCH receivable account provided
+                         ##credit ATM Acquirer Fee Account provided
+                         ####################################################################
+                         ##IF ((BANCS.INPUT.Command == "PRCR")) THEN
+                         	#{
+                                     sv_d = BANCS.OUTPUT.Solid
+				     BANCS.OUTPUT.FORACID=sv_d + "19400000101"
+                                     PRINT(BANCS.OUTPUT.Foracid)
+                                     BANCS.OUTPUT.contraAccount=sv_d + "55090000201"
+                                     PRINT(BANCS.OUTPUT.contraAccount)
+				     BANCS.OUTPUT.successOrFailure = "S"
+                                     EXITSCRIPT
+
+                                 #}
+	                ENDIF
+                  #}
+       ENDIF
+
+ ##########THIS SECTION HANDLES ATM REMOTE ON US PAYMENTS ########
+       IF ((sv_f != "1FGM") AND (sv_b == "506186")) THEN
+                #{
+                         ####################################################################
+                         ##REMOTE - ON - US PAYMENTS 
+                         ##debit  Customers Account 
+                         ##credit GamSwitch Account Payable Account provided
+                         ####################################################################
+                         ##IF ((BANCS.INPUT.Command == "PRCR")) THEN
+                         	#{
+                                     sv_d = BANCS.OUTPUT.Solid
+				     BANCS.OUTPUT.FORACID=BANCS.INPUT.FORACID
+                                     PRINT(BANCS.OUTPUT.Foracid)
+                                     BANCS.OUTPUT.contraAccount=sv_d + "34389003401"
+                                     PRINT(BANCS.OUTPUT.contraAccount)
+				     BANCS.OUTPUT.successOrFailure = "S"
+                                     EXITSCRIPT
+
+                                 #}
+	                ENDIF
+                  #}
+       ENDIF
+###################################################################
+###################################################################
+###################################################################
+
+
+
+
+
+	
+                                    
+
+
+
+       ###################################################################
+       #############################ATM SCRIPTING ENDS HERE###############
+       ###################################################################
+       ################################POS_SCRIPTING_STARTS##############
+       ###############################################################
+       #IF (sv_l == "POS") THEN
+              	#####THIS HANDLES POS TRANSACTIONS IN GMD
+                IF ((sv_b == "506186")) THEN
+                       	IF (BANCS.INPUT.TranCrncy == "GMD") THEN
+                               	#########################################
+                                ###FBN POS PURCHASE
+                                #########################################
+
+                                IF ((BANCS.INPUT.Command == "PRCR") OR (BANCS.INPUT.Command == "PRRR")) THEN
+                                       #{
+                                        ####################################################################
+                                        #Credit GIM POS Payables suspense account
+                                        ####################################################################
+                                        BANCS.OUTPUT.Foracid = BANCS.INPUT.Foracid
+					sv_d =BANCS.OUTPUT.SolId
+                                        BANCS.OUTPUT.contraAccount= sv_j + "19350000201"
+                                        PRINT(BANCS.OUTPUT.Foracid)
+                                        PRINT(BANCS.OUTPUT.contraAccount)
+                                        BANCS.OUTPUT.successOrFailure = "S"
+                                        EXITSCRIPT
+                               #}
+                               ENDIF
+                        #}
+                        ENDIF
+
+              	ENDIF
+       	#ENDIF
+	ENDIF
+
+##########################################################################
+################THIS SECTION HANDLES MASTERCARD.."CSC"###################
+#########################################################################
+IF (sv_m == "CSC") THEN
+	#{
+        PRINT(BANCS.INPUT.CardAcceptorName)
+        sv_l = STRLEN(BANCS.INPUT.CardAcceptorName)
+        sv_e = MID$(BANCS.INPUT.CardAcceptorName,(sv_l - 2),2)
+        PRINT(sv_e)
+        PRINT(BANCS.INPUT.TranCrncy)
+        PRINT(BANCS.INPUT.DeviceId)
+        sv_c = LTRIM(BANCS.INPUT.DeviceId,'0')
+        #sv_c = LTRIM(BANCS.INPUT.DeviceId,' ')
+	print(sv_c)
+        sv_r = MID$(sv_c,0,1)
+        sv_f = MID$(sv_c,0,3)
+        sv_g = MID$(sv_c,4,4)
+        sv_h = MID$(sv_c,0,4)
+        PRINT(sv_r)
+       	PRINT(sv_f)
+        PRINT(sv_g)
+        sv_l = (BANCS.INPUT.DevType)
+        PRINT(BANCS.INPUT.CustCardId)
+        PRINT(BANCS.INPUT.DevType)
+        sv_m=BANCS.INPUT.DccId
+        PRINT(sv_m)
+        sv_a = BANCS.INPUT.CustCardId
+        sv_b = mid$(sv_a, 0, 6)
+        
+	########################################
+        #This handles mastercard transfers######
+        #########################################
+       	#####THIS HANDLES ATM MasterCard ON US TRANSACTIONS
+       IF ((sv_b == "506186") AND (sv_f == "1FGM")) THEN
+        	#{
+                IF (BANCS.INPUT.TranCrncy == "GMD") THEN
+                	#{
+                        #########################################
+                        ###FBN Master CARD (ON-US) CASH WITHDRAWAL
+                        #########################################
+                        IF ((BANCS.INPUT.Command == "CWDR") OR (BANCS.INPUT.Command == "CWRR")) THEN
+                       		#{
+                                sv_k = "stermid,stermacct | select term_id, till_acct_no from tbaadm.terminal_table"
+                                sv_k =  sv_k + " where term_id = '" + sv_c  + "'"
+                                PRINT(sv_k)
+                                sv_z = urhk_DbSelect(sv_k)
+                                PRINT(sv_z)
+                                IF(sv_z == "0")THEN
+                                	#{
+                                        BANCS.OUTPUT.contraAccount = BANCS.OUTPARAM.stermacct
+                                        PRINT(BANCS.OUTPUT.contraAccount)
+                                        #}
+                                ELSE
+                                        #{
+                                        BANCS.OUTPUT.RespCode="99"
+                                        BANCS.OUTPUT.successOrFailure="F"
+                                        EXITSCRIPT
+                                        #}
+                                ENDIF
+
+                               	BANCS.OUTPUT.Foracid = BANCS.INPUT.Foracid
+                                PRINT (BANCS.OUTPUT.Foracid)
+                                BANCS.OUTPUT.successOrFailure = "S"
+                                EXITSCRIPT
+                                #}
+                       ENDIF
+            	 #}
+            	 ENDIF
+	ENDIF
+
+        ##########THIS SECTION HANDLES NOT ON US TRANSACTIONS
+        IF ((sv_b != "506186") AND (sv_f == "1FGM")) THEN
+        	#{
+                ####################################################################
+                ##NOT - ON - US TRANSACTION
+                ##debit Mastercard receivables suspense account provided
+                ##credit ATM TILL account which would be selected from the database
+                ####################################################################
+                IF ((BANCS.INPUT.Command == "CWDR") OR (BANCS.INPUT.Command == "CWRR")) THEN
+                	#{
+                        sv_k = "stermid,stermacct | select term_id, till_acct_no from tbaadm.terminal_table"
+                        sv_k =  sv_k + " where term_id = '" + sv_c  + "'"
+                        PRINT(sv_k)
+                        sv_z = urhk_DbSelect(sv_k)
+                        PRINT(sv_z)
+                        IF(sv_z == "0")THEN
+                        	#{
+                                BANCS.OUTPUT.contraAccount = BANCS.OUTPARAM.stermacct
+                                PRINT(BANCS.OUTPUT.contraAccount)
+                                BANCS.OUTPUT.Termid = BANCS.OUTPARAM.stermid
+                                PRINT (BANCS.OUTPUT.Termid)
+                                sv_b =MID$(BANCS.OUTPUT.Termid, 4,3)
+                                PRINT(sv_b)
+                                #}
+                        ELSE
+                             	#{
+                                BANCS.OUTPUT.RespCode="99"
+                                BANCS.OUTPUT.successOrFailure="F"
+                                EXITSCRIPT
+                               	#}
+                       	ENDIF
+                        #BANCS.OUTPUT.Foracid = "01489379100101"
+                        #PRINT(BANCS.OUTPUT.Foracid)
+                        BANCS.OUTPUT.successOrFailure = "S"
+                        EXITSCRIPT
+                        #}
+               ENDIF
+               #}
+       	ENDIF
+
+	###############################################
+       	#FBN MasterCard ON ANOTHER MACHINE
+        #REMOTE ON US
+        ###############################################
+        IF ((sv_f != "1FGM") AND (sv_b == "506186")) THEN
+        	#{
+                IF ((BANCS.INPUT.Command == "CWDR") OR (BANCS.INPUT.Command == "CWRR")) THEN
+
+               		#{
+                        IF (BANCS.INPUT.TranCrncy == "GMD") THEN
+                        	#{
+                                ############################################################
+                                #REMOTE ON US
+                               	#credit Mastercard payable suspense account provided
+                                ############################################################
+								sv_j=BANCS.OUTPUT.SOL_ID
+								contraAccount= sv_j + "01489379200201"
+                                BANCS.OUTPUT.Foracid = BANCS.INPUT.Foracid
+                                PRINT(BANCS.OUTPUT.Foracid)
+                                PRINT(BANCS.OUTPUT.contraAccount)
+                                BANCS.OUTPUT.successOrFailure = "S"
+                                EXITSCRIPT
+                                #}
+                       ENDIF
+
+
+                       #}
+               ENDIF
+               #}
+        ENDIF
+
+       	#########################################################################
+       	####################POS TRANSACTIONS FOR MASTERCARD######################
+       	#########################################################################
+      	IF (BANCS.INPUT.TranCrncy == "GMD")THEN
+       	#{
+        IF ((sv_l == "POS") AND (sv_b == "506186")) THEN
+       		#{
+               	IF ((BANCS.INPUT.Command == "PRCR") OR (BANCS.INPUT.Command == "PRRR")) THEN
+                      	#{
+                        #############################################################################
+                        ##credit Mastercard POS/WEB Payables account to be provided
+                        ############################################################################
+                        BANCS.OUTPUT.Foracid = ""
+                        BANCS.OUTPUT.contraAccount= "19350000201"
+                       	PRINT(BANCS.OUTPUT.Foracid)
+                        PRINT(BANCS.OUTPUT.contraAccount)
+                        BANCS.OUTPUT.successOrFailure = "S"
+                        EXITSCRIPT
+                        #}
+               	ENDIF
+                       #}
+       	ENDIF
+	ENDIF	
+ENDIF
+# ---------End mastercard transactions
+        #}
+ENDIF
+
+        EXITSCRIPT
+        TRACE OFF
+END-->

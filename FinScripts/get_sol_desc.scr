@@ -1,0 +1,32 @@
+# Script name       : get_sol_desc.scr 
+# Author            : Dele Fasuyi 
+# Date              : 25, June 2002
+# Desc              :
+# Called By         :
+# Bank              :
+# Flow of Script    :
+#
+#
+# Menu Option       :
+###############################################################################
+
+<--start
+## trace on
+
+    sv_x = BANCS.INPUT.sol_id
+    print(sv_x)
+
+    BANCS.OUTPUT.sol_desc = ""
+
+    sv_q = "sv_a|select sol_desc from SOL"
+    sv_q = sv_q + " where sol_id ='" + sv_x + "'"
+	sv_q = sv_q + " and bank_id = '"+ BANCS.STDIN.contextBankId +"'"
+    sv_z = urhk_dbSelect(sv_q)
+    print(sv_z)
+    if (sv_z == 0) then
+          BANCS.OUTPUT.sol_desc = trim(BANCS.OUTPARAM.sv_a)
+          print(BANCS.OUTPUT.sol_desc)
+    endif
+
+#trace off
+end-->

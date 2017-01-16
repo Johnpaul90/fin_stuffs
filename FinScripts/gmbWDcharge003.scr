@@ -1,0 +1,141 @@
+<--START
+TRACE ON
+
+#---------------------------------------------------
+# Create the necessary repositories and classes
+#---------------------------------------------------
+
+IF (REPEXISTS("FBN") == 0 ) THEN
+#{
+	CREATEREP("FBN")
+#}
+ENDIF
+
+
+IF (CLASSEXISTS("FBN","GMB") == 0) THEN
+#{
+	CREATECLASS("FBN","GMB",5)
+#}
+ENDIF
+
+print(BANCS.STDIN.userId)
+#-------------------------
+#Validating user Input
+#-------------------------
+FBN.GMB.tranId = BANCS.INPUT.TranId
+print(FBN.GMB.tranId)
+FBN.GMB.boddate = mid$(BANCS.STDIN.BODDate,0,10)
+print(FBN.GMB.boddate)
+print(BANCS.STDIN.BODDate)
+
+#Get the posted trxn of the customer account number
+               #sv_s = "vacid,acctno,crncy,refAmt,pcul|Select g.acid,foracid,g.acct_crncy_code,d.ref_amt,replace(d.tran_particular,'^CHRG^','') "
+			   sv_s = "vacid,acctno,crncy,refAmt,pcul|Select g.acid,foracid,g.acct_crncy_code,d.ref_amt,d.tran_particular "
+               sv_s = sv_s + " from tbaadm.gam g, tbaadm.dtd d "
+               sv_s = sv_s + " where g.acid = d.acid And pstd_flg = 'Y' "
+               sv_s = sv_s + " And  g.del_flg ='N' And  d.del_flg='N'"
+               sv_s = sv_s + " And  ltrim(tran_id) =ltrim('" + FBN.GMB.tranId + "')"
+               #sv_s = sv_s + " And  INSTR(TRAN_PARTICULAR,'^CHRG^') != 0 "
+               sv_s = sv_s + " And  g.bank_id = '"+ BANCS.STDIN.contextBankId +"'"
+               sv_s = sv_s + " And  d.bank_id = '"+ BANCS.STDIN.contextBankId +"'"
+               sv_s = sv_s + " And  part_tran_type='D' And PSTD_USER_ID='"+BANCS.STDIN.userId+"'"
+               sv_s = sv_s + " And  to_date(d.tran_date,'dd-mm-yyyy') =to_date('"+FBN.GMB.boddate+"','dd-mm-yyyy')"
+               #sv_s = sv_s + " And  g.schm_code ='SA303' "
+               print(sv_s)
+               sv_d = urhk_dbSelect(sv_s)
+               print(sv_d)
+               if (sv_d != "0") then
+               #{
+                  Goto Finish
+               #}
+               endif
+			   FBN.GMB.vacid = BANCS.OUTPARAM.vacid
+               FBN.GMB.acctno = BANCS.OUTPARAM.acctno
+               FBN.GMB.crncy = BANCS.OUTPARAM.crncy
+               FBN.GMB.refAmt = BANCS.OUTPARAM.refAmt
+			   FBN.GMB.pcul = BANCS.OUTPARAM.pcul
+print(FBN.GMB.acctno)
+print(FBN.GMB.crncy)
+print(FBN.GMB.refAmt)
+
+#--Check to ensure that TrxnAmt + Charge Applied + Vat of Applied Charge < EffAvailable Amt
+
+#--Retrieve PTTM Percentage VAT Amount
+   sv_s = "fvat|Select a.AMT_PCNT from tbaadm.ptt p,tbaadm.adm a "
+   sv_s = sv_s + " where p.AMT_DERV_SRL_NUM =a.AMT_DRV_SRL_NUM "
+   sv_s = sv_s + " And   event_type='LNKED' "
+   sv_s = sv_s + " And   p.event_id ='VALUE_ADDED_TAX' "
+   sv_s = sv_s + " And   a.bank_id ='" + BANCS.STDIN.contextBankId + "' "
+   sv_s = sv_s + " And   p.bank_id ='" + BANCS.STDIN.contextBankId + "' "
+   print(sv_s)
+   sv_d = urhk_dbSelect(sv_s)
+   if (sv_d != "0") then
+   #{
+      Goto Finish
+   #}
+   endif
+   FBN.GMB.fvat = BANCS.OUTPARAM.fvat
+   print(FBN.GMB.fvat)
+
+#--Retrieve PTTM Fixed Charge Amount
+   sv_s = "fchrg|Select a.FIXED_AMT from tbaadm.ptt p,tbaadm.adm a "
+   sv_s = sv_s + " where p.AMT_DERV_SRL_NUM =a.AMT_DRV_SRL_NUM "
+   sv_s = sv_s + " And   event_type='TRANF' "
+   sv_s = sv_s + " And   p.event_id ='MIN_BAL_CHRG' "
+   sv_s = sv_s + " And   a.bank_id ='" + BANCS.STDIN.contextBankId + "' "
+   sv_s = sv_s + " And   p.bank_id ='" + BANCS.STDIN.contextBankId + "' "
+   print(sv_s)
+   sv_d = urhk_dbSelect(sv_s)
+   if (sv_d != "0") then
+   #{
+      FBN.GMB.fchrg = "50.00"
+      Goto Finish
+   #}
+   endif
+   FBN.GMB.fchrg = BANCS.OUTPARAM.fchrg
+   print(FBN.GMB.fchrg)
+
+#-- VAT calculation and Total Amount to charge customer account
+
+   sv_v = CDOUBLE(FBN.GMB.fvat)/100
+   print(sv_v)
+   FBN.GMB.vat = CDOUBLE(FBN.GMB.fchrg) * sv_v
+   print(FBN.GMB.vat)
+
+#-- Actual Charge Transaction   
+   #sv_s = "update tbaadm.dtd set tran_particular='"+FBN.GMB.pcul+"'"
+   #sv_s = sv_s + " where acid ='"+FBN.GMB.vacid+"'" 
+   #sv_s = sv_s + " And  pstd_flg = 'Y' And del_flg='N'"
+   #sv_s = sv_s + " And  ltrim(tran_id) =ltrim('" + FBN.GMB.tranId + "')"
+   #sv_s = sv_s + " And  INSTR(TRAN_PARTICULAR,'^CHRG^') != 0 "
+   #sv_s = sv_s + " And  part_tran_type='D' 
+   #sv_s = sv_s + " And  bank_id = '"+ BANCS.STDIN.contextBankId +"'"
+   #sv_s = sv_s + " And  PSTD_USER_ID='"+BANCS.STDIN.userId+"'"
+   #sv_s = sv_s + " And  to_date(d.tran_date,'dd-mm-yyyy') =to_date('"+FBN.GMB.boddate+"','dd-mm-yyyy')"
+   #print(sv_s)
+   #sv_d = urhk_dbSQL(sv_s)
+   #if (sv_d != "0") then
+   ##{
+      #Goto Finish
+   ##}
+   #endif
+   #sv_d = urhk_dbSQL("Commit")
+
+#Invoke the charge script
+       sv_d = "exebatch babx4061 0 gmbWDtrxn.scr " + FBN.GMB.acctno + " " + FBN.GMB.fchrg +  " " +  FBN.GMB.crncy + " " + FBN.GMB.vat
+       print(sv_d)
+       sv_b = system(sv_d)
+       print(sv_b)
+       if (sv_b != 0) then
+         GOTO Finish
+      endif
+
+
+Finish:
+     print("Success")
+
+
+EXITSCRIPT
+trace off
+
+END-->

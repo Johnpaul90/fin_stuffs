@@ -1,0 +1,320 @@
+<--start
+#Sv_r = urhk_B2k_PrintRepos("BANCS")
+####################################################################################################
+# Source Name   : gmbRBCOTaccu.scr
+# Date          : 23-06-2016
+# Description   : Custom Batch Job Rebuild For Accural of COT charges for all Eligible Account
+#               : For a Selected Date
+# Called Script : None
+# Calling Script: Batch Job
+# Author        : Louis C.
+# Alpha - plus Technologies & Services Ltd.
+# Bank          : FIRST BANK GAMBIA
+######################################################################################################
+
+trace on
+#Sv_r = urhk_B2k_PrintRepos("BANCS")
+#-----------------------------------
+# Creation of CLEARING repository
+#-----------------------------------
+IF (repexists("COT") == 0) THEN
+#{ 
+	CREATEREP("COT")
+#} 
+ENDIF  
+
+IF (classexists("COT", "ACCU") == 0) THEN
+#{
+	CREATECLASS("COT","ACCU",5) 
+#}
+ENDIF 
+print(BANCS.STDIN.mySolId)
+#-----------------------------------------
+# Geting the inputs from Finacle Tables
+#-----------------------------------------
+print(COT.ACCU.acctno)
+print(COT.ACCU.chk)
+#COT.ACCU.boddate = mid$(BANCS.STDIN.BODDate,0,10)
+COT.ACCU.bankId=BANCS.STDIN.contextBankId
+COT.ACCU.solId=BANCS.STDIN.mySolId
+
+#Get Last Date of COT charge
+		sv_s = "mxdate|Select max(ACCU_DATE) from custom.COTACCU_TBL "
+		sv_s = sv_s + " Where acid in (select acid from tbaadm.GAM where foracid='"+COT.ACCU.acctno+"')"
+		sv_s = sv_s + " And CHRG_FLG ='N' "
+		print(sv_s)
+		sv_r = urhk_dbSelect(sv_s)
+		if (sv_r != 0) then
+			goto Finish
+		endif
+		COT.ACCU.boddate = BANCS.OUTPARAM.mxdate  
+		
+#Get the COT Eligible Records for the BODdate 
+#Should user be able to process account not in his Branch?
+
+   sv_a = "vacid,vcrncy,vdate,vfee|Select acid,REF_CRNCY_CODE,tran_date,sum(tran_amt) from tbaadm.DCTD_ACLI "
+   sv_a = sv_a +"  Where del_flg='N' "
+   sv_a = sv_a +"  And to_char(to_date(TRAN_DATE,'dd-mm-yyyy'),'DD-MON-YY')> to_char(to_date('"+COT.ACCU.boddate+"','dd-mm-yyyy'),'DD-MON-YY')"
+   sv_a = sv_a +"  And PART_TRAN_TYPE ='D'"
+   sv_a = sv_a +"  And TRAN_TYPE ='C'"
+   sv_a = sv_a +"  And REF_CRNCY_CODE ='GMD'"
+   sv_a = sv_a +"  And TRAN_PARTICULAR NOT LIKE '%REVERSAL%' "
+   sv_a = sv_a +"  And ltrim(tran_id) not in (select ltrim(tran_id) from tbaadm.ATD where REVERSAL_FLG='Y') "
+   #sv_a = sv_a +"  And sol_id = '"+ COT.ACCU.solId + "'"
+   sv_a = sv_a +"  And acid in (select acid from tbaadm.GAM where foracid='"+COT.ACCU.acctno+"')"
+   sv_a = sv_a +"  And bank_id='"+BANCS.STDIN.contextBankId+"' group by acid, REF_CRNCY_CODE,tran_date "
+   print(sv_a)
+   sv_d = urhk_dbSelect(sv_a)
+   if (sv_d != "0") then
+   #{
+      Goto Finish
+   #}
+   endif
+   COT.ACCU.vacid = BANCS.OUTPARAM.vacid
+   print(COT.ACCU.vacid)
+   COT.ACCU.vcrncy = BANCS.OUTPARAM.vcrncy
+   print(COT.ACCU.vcrncy)
+   COT.ACCU.vfee = BANCS.OUTPARAM.vfee
+   print(COT.ACCU.vfee)
+   COT.ACCU.vdate = BANCS.OUTPARAM.vdate
+   print(COT.ACCU.vdate)
+   
+#--Retrieve PTTM Pcnt VAT Amount   
+   sv_s = "fvat|Select a.AMT_PCNT from tbaadm.ptt p,tbaadm.adm a "
+   sv_s = sv_s + " where p.AMT_DERV_SRL_NUM =a.AMT_DRV_SRL_NUM "
+   sv_s = sv_s + " And   event_type='LNKED' "
+   sv_s = sv_s + " And   p.event_id ='VALUE_ADDED_TAX' "
+   sv_s = sv_s + " And   a.bank_id ='" + BANCS.STDIN.contextBankId + "' "
+   sv_s = sv_s + " And   p.bank_id ='" + BANCS.STDIN.contextBankId + "' "
+   print(sv_s)
+   sv_d = urhk_dbSelect(sv_s)
+   if (sv_d != "0") then
+   #{
+      Goto Finish
+   #}
+   endif
+   COT.ACCU.fvat = BANCS.OUTPARAM.fvat
+   print(COT.ACCU.fvat)
+   
+###################################### 
+#Retrieve Concession Amount(If Exist) 
+######################################  
+	
+   sv_s = "conCnt|Select count(TRAN_AMT) From CUSTOM.CONCE_TBL "
+   sv_s = sv_s + " where ACCT_NUM in (Select foracid from tbaadm.GAM where acid='"+COT.ACCU.vacid+"')"
+   sv_s = sv_s + " And   bank_id ='" + BANCS.STDIN.contextBankId + "' "
+   sv_s = sv_s + " And   del_flg ='N' And ent_cre_flg='Y' "
+   print(sv_s)
+   sv_d = urhk_dbSelect(sv_s)
+   if (sv_d != "0") then
+   #{
+      COT.ACCU.conCnt = "0"
+   #}
+   else 
+     COT.ACCU.conCnt = BANCS.OUTPARAM.conCnt
+     print(COT.ACCU.conCnt)
+   endif 
+         
+If (COT.ACCU.conCnt != "0") then
+#--Retrieve Concession Pcnt Charge Amount
+		sv_s = "fch|Select TRAN_AMT From CUSTOM.CONCE_TBL "
+		sv_s = sv_s + " where ACCT_NUM in (Select foracid from tbaadm.GAM where acid='"+COT.ACCU.vacid+"')"
+		sv_s = sv_s + " And   bank_id ='" + BANCS.STDIN.contextBankId + "' "
+		sv_s = sv_s + " And   del_flg ='N' And ent_cre_flg='Y' "
+		print(sv_s)
+		sv_d = urhk_dbSelect(sv_s)
+		if (sv_d != "0") then
+		#{
+			Goto Finish
+		#}
+		endif 
+		sv_q = CDOUBLE(BANCS.OUTPARAM.fch)/100
+		COT.ACCU.fchrg = CDOUBLE(COT.ACCU.vfee) * sv_q
+		print(COT.ACCU.fchrg)
+Else
+#--Retrieve PTTM Pcnt Charge Amount
+		sv_s = "fch|Select a.AMT_PCNT from tbaadm.ptt p,tbaadm.adm a "
+		sv_s = sv_s + " where p.AMT_DERV_SRL_NUM =a.AMT_DRV_SRL_NUM "
+		sv_s = sv_s + " And   event_type='TRANF' "
+		sv_s = sv_s + " And   p.event_id ='MIN_BAL_CHRG' "
+		sv_s = sv_s + " And   a.bank_id ='" + BANCS.STDIN.contextBankId + "' "
+		sv_s = sv_s + " And   p.bank_id ='" + BANCS.STDIN.contextBankId + "' "
+		print(sv_s)
+		sv_d = urhk_dbSelect(sv_s)
+		if (sv_d != "0") then
+		#{
+			Goto Finish
+		#}
+		endif
+		sv_q = CDOUBLE(BANCS.OUTPARAM.fch)/100
+		COT.ACCU.fchrg = CDOUBLE(COT.ACCU.vfee) * sv_q
+		print(COT.ACCU.fchrg)
+EndIf
+
+#-- VAT calculation and Total Amount to charge customer account
+
+   sv_v = CDOUBLE(COT.ACCU.fvat)/100
+   print(sv_v)
+   COT.ACCU.vat = CDOUBLE(COT.ACCU.fchrg) * sv_v
+   print(COT.ACCU.vat)
+   
+#Get the Account Number
+		sv_s = "vacct,vcrncy|Select foracid,acct_crncy_code from tbaadm.GAM where acid='"+COT.ACCU.vacid+"'"
+		print(sv_s)
+		sv_r = urhk_dbSelect(sv_s)
+		if (sv_r != 0) then
+			Goto Finish
+		endif
+		COT.ACCU.vacct = BANCS.OUTPARAM.vacct 
+		COT.ACCU.vcrncy = BANCS.OUTPARAM.vcrncy 
+		
+#Persist Processed Record
+		sv_s = "Insert into custom.COTACCU_TBL values('"+COT.ACCU.solId+"','"+COT.ACCU.vacct+"',to_date('"+COT.ACCU.boddate+"','dd-mm-yyyy'),"
+		sv_s = sv_s + COT.ACCU.fchrg+","+COT.ACCU.vat+",'N','"+BANCS.STDIN.userId+"',"
+		sv_s = sv_s + " to_date('"+COT.ACCU.boddate+"','dd-mm-yyyy'),'"+COT.ACCU.bankId+"','C')"
+		print(sv_s)
+		sv_r = urhk_dbSQL(sv_s)
+		if (sv_r != 0) then
+			Goto HXFER
+		else
+			sv_r = urhk_dbSQL("commit")
+			Goto HXFER
+		endif
+
+#Transfer Trxn Type
+HXFER:
+#Get the COT Eligible Records for the BODdate
+   sv_a = "vacid,vcrncy,vdate,vfee|Select acid, REF_CRNCY_CODE,tran_date,sum(tran_amt) from tbaadm.DCTD_ACLI "
+   sv_a = sv_a +"  Where del_flg='N' "
+   sv_a = sv_a +"  And to_char(to_date(TRAN_DATE,'dd-mm-yyyy'),'DD-MON-YY')> to_char(to_date('"+COT.ACCU.boddate+"','dd-mm-yyyy'),'DD-MON-YY')"
+   sv_a = sv_a +"  And PART_TRAN_TYPE ='D'"
+   sv_a = sv_a +"  And TRAN_TYPE ='T'"
+   sv_a = sv_a +"  And TRAN_SUB_TYPE ='CI'"
+   sv_a = sv_a +"  And REF_CRNCY_CODE ='GMD'"
+   #sv_a = sv_a +"  And sol_id = '"+ COT.ACCU.solId + "'"
+   sv_a = sv_a +"  And TRAN_PARTICULAR NOT LIKE '%REVERSAL%'"
+   sv_a = sv_a +"  And ltrim(tran_id) not in (select ltrim(tran_id) from tbaadm.ATD where REVERSAL_FLG='Y') "
+   sv_a = sv_a +"  And bank_id='"+BANCS.STDIN.contextBankId+"' group by acid, REF_CRNCY_CODE,tran_date "
+   print(sv_a)
+   sv_d = urhk_dbSelect(sv_a)
+   if (sv_d != "0") then
+   #{
+      Goto Finish
+   #}
+   endif
+   COT.ACCU.vacid = BANCS.OUTPARAM.vacid
+   print(COT.ACCU.vacid)
+   COT.ACCU.vcrncy = BANCS.OUTPARAM.vcrncy
+   print(COT.ACCU.vcrncy)
+   COT.ACCU.vfee = BANCS.OUTPARAM.vfee
+   print(COT.ACCU.vfee)
+   COT.ACCU.vdate = BANCS.OUTPARAM.vdate
+   print(COT.ACCU.vdate)
+
+#--Retrieve PTTM Pcnt VAT Amount   
+   sv_s = "fvat|Select a.AMT_PCNT from tbaadm.ptt p,tbaadm.adm a "
+   sv_s = sv_s + " where p.AMT_DERV_SRL_NUM =a.AMT_DRV_SRL_NUM "
+   sv_s = sv_s + " And   event_type='LNKED' "
+   sv_s = sv_s + " And   p.event_id ='VALUE_ADDED_TAX' "
+   sv_s = sv_s + " And   a.bank_id ='" + BANCS.STDIN.contextBankId + "' "
+   sv_s = sv_s + " And   p.bank_id ='" + BANCS.STDIN.contextBankId + "' "
+   print(sv_s)
+   sv_d = urhk_dbSelect(sv_s)
+   if (sv_d != "0") then
+   #{
+      Goto Finish
+   #}
+   endif
+   COT.ACCU.fvat = BANCS.OUTPARAM.fvat
+   print(COT.ACCU.fvat)
+   
+###################################### 
+#Retrieve Concession Amount(If Exist) 
+######################################  
+	
+   sv_s = "conCnt|Select count(TRAN_AMT) From CUSTOM.CONCE_TBL "
+   sv_s = sv_s + " where ACCT_NUM in (Select foracid from tbaadm.GAM where acid='"+COT.ACCU.vacid+"')"
+   sv_s = sv_s + " And   bank_id ='" + BANCS.STDIN.contextBankId + "' "
+   sv_s = sv_s + " And   del_flg ='N' And ent_cre_flg='Y' "
+   print(sv_s)
+   sv_d = urhk_dbSelect(sv_s)
+   if (sv_d != "0") then
+   #{
+      COT.ACCU.conCnt = "0"
+   #}
+   else 
+     COT.ACCU.conCnt = BANCS.OUTPARAM.conCnt
+     print(COT.ACCU.conCnt)
+   endif 
+         
+If (COT.ACCU.conCnt != "0") then
+#--Retrieve Concession Pcnt Charge Amount
+		sv_s = "fch|Select TRAN_AMT From CUSTOM.CONCE_TBL "
+		sv_s = sv_s + " where ACCT_NUM in (Select foracid from tbaadm.GAM where acid='"+COT.ACCU.vacid+"')"
+		sv_s = sv_s + " And   bank_id ='" + BANCS.STDIN.contextBankId + "' "
+		sv_s = sv_s + " And   del_flg ='N' And ent_cre_flg='Y' "
+		print(sv_s)
+		sv_d = urhk_dbSelect(sv_s)
+		if (sv_d != "0") then
+		#{
+			Goto Finish
+		#}
+		endif 
+		sv_q = CDOUBLE(BANCS.OUTPARAM.fch)/100
+		COT.ACCU.fchrg = CDOUBLE(COT.ACCU.vfee) * sv_q
+		print(COT.ACCU.fchrg)
+Else
+#--Retrieve PTTM Pcnt Charge Amount
+		sv_s = "fch|Select a.AMT_PCNT from tbaadm.ptt p,tbaadm.adm a "
+		sv_s = sv_s + " where p.AMT_DERV_SRL_NUM =a.AMT_DRV_SRL_NUM "
+		sv_s = sv_s + " And   event_type='TRANF' "
+		sv_s = sv_s + " And   p.event_id ='MIN_BAL_CHRG' "
+		sv_s = sv_s + " And   a.bank_id ='" + BANCS.STDIN.contextBankId + "' "
+		sv_s = sv_s + " And   p.bank_id ='" + BANCS.STDIN.contextBankId + "' "
+		print(sv_s)
+		sv_d = urhk_dbSelect(sv_s)
+		if (sv_d != "0") then
+		#{
+			Goto Finish
+		#}
+		endif
+		sv_q = CDOUBLE(BANCS.OUTPARAM.fch)/100
+		COT.ACCU.fchrg = CDOUBLE(COT.ACCU.vfee) * sv_q
+		print(COT.ACCU.fchrg)
+EndIf
+
+#-- VAT calculation and Total Amount to charge customer account
+
+   sv_v = CDOUBLE(COT.ACCU.fvat)/100
+   print(sv_v)
+   COT.ACCU.vat = CDOUBLE(COT.ACCU.fchrg) * sv_v
+   print(COT.ACCU.vat)
+   
+#Get the Account Number
+		sv_s = "vacct,vcrncy|Select foracid,acct_crncy_code from tbaadm.GAM where acid='"+COT.ACCU.vacid+"'"
+		print(sv_s)
+		sv_r = urhk_dbSelect(sv_s)
+		if (sv_r != 0) then
+			goto Finish
+		endif
+		COT.ACCU.vacct = BANCS.OUTPARAM.vacct 
+		COT.ACCU.vcrncy = BANCS.OUTPARAM.vcrncy 
+		
+#Persist Processed Record
+		sv_s = "Insert into custom.COTACCU_TBL values('"+COT.ACCU.solId+"','"+COT.ACCU.vacct+"',to_date('"+COT.ACCU.boddate+"','dd-mm-yyyy'),"
+		sv_s = sv_s + COT.ACCU.fchrg+","+COT.ACCU.vat+",'N','"+BANCS.STDIN.userId+"',"
+		sv_s = sv_s + " to_date('"+COT.ACCU.boddate+"','dd-mm-yyyy'),'"+COT.ACCU.bankId+"','T')"
+		print(sv_s)
+		sv_r = urhk_dbSQL(sv_s)
+		if (sv_r != 0) then
+			goto Finish
+		else
+			sv_r = urhk_dbSQL("commit")
+		endif
+	
+
+Finish:
+
+exitscript
+trace off
+end-->

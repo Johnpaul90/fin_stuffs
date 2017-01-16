@@ -1,0 +1,650 @@
+<--start
+trace on
+#================================================================================
+# Script  name          : chqconfmn001.scr
+# Date                  : 20 JAN 2012
+# Description           : This script is called on the click of Go button on criteria
+#                         page of CHQCONF menu option
+# Author                : Arije Abayomi
+# Calling Scripts       :
+# Called Scripts        :
+# Modification History :
+# < Version No.> <Date>  <Author Name>  <Description>
+#=================================================================================
+IF (REPEXISTS("CUST") == 0) THEN
+#{
+	CREATEREP("CUST")
+#}
+ENDIF
+
+IF (CLASSEXISTS("CUST", "CONF") == 0) THEN
+#{
+	CREATECLASS("CUST", "CONF", 5)
+#}
+ENDIF
+
+IF (BANCS.STDIN.languageCode == "INFENG") THEN
+#{
+	CUST.CONF.ERR000001 = "Error while fetching the data.Database problem"
+	CUST.CONF.ERR000002 = "Duplicate record exists"
+	CUST.CONF.ERR000003 = "Record does not exist"
+	CUST.CONF.ERR000004 = "Account Id Cannot Be Null"
+	CUST.CONF.ERR000005 = "Account is closed"
+	CUST.CONF.ERR000006 = "Only Current Accounts can be PreConfirmed"
+	CUST.CONF.ERR000007 = "Instrument No Cannot be Null, Please enter Instrument No"
+	CUST.CONF.ERR000008 = "Instrument No must be numeric"
+	CUST.CONF.ERR000009 = "Cheque Not Issued, Please Enter A Valid Instrument Number."
+	CUST.CONF.ERR000010 = "Record Already Exist For This Account And Instrument Number"
+	CUST.CONF.ERR000011 = "Record Already Exist: Pending Verification"
+	CUST.CONF.ERR000044 = "Pre-Confirmation Record Already Exists"
+	CUST.CONF.ERR000012 = "Instrument Is Already Passed"
+	CUST.CONF.ERR000013 = "Cheque Not Ranged !!!Enter Valid Instrument No"
+	CUST.CONF.ERR000014 = "Modification Pending Verification Exists,Cancel Or Verify"
+	CUST.CONF.ERR000015 = "Cheque Confirmation Request Not Found"
+	CUST.CONF.ERR000016 = "Nothing to or cancel"
+	CUST.CONF.ERR000017 = "Beneficiary Cannot be Null, Please enter beneficiary"
+	CUST.CONF.ERR000018 = "Only User From the Same Sol Can Modify an Existing Record"
+	CUST.CONF.ERR000019 = "Cannot Modifiy: Record Already Deleted"
+	CUST.CONF.ERR000020 = "Only Same User Can Modify An Unverified Record"
+	CUST.CONF.ERR000021 = "Record Already Verified"
+	CUST.CONF.ERR000022 = "Cannot Verifiy: Record Already Deleted"
+	CUST.CONF.ERR000023 = "Only User From the Same Sol Can Verify/Cancel"
+	CUST.CONF.ERR000024 = "Record Has Been Created Earlier"
+	CUST.CONF.ERR000025 = "Security No cannot be null"
+	CUST.CONF.ERR000026 = "Beneficiary No must not be null"
+	CUST.CONF.ERR000027 = "Invalid length for security code, Please enter 6 digits"
+#}
+ENDIF
+
+CUST.CONF.funcCode = BANCS.INPUT.funcCode
+CUST.CONF.acctNum = BANCS.INPUT.acctNum
+CUST.CONF.instNo = BANCS.INPUT.instNo
+CUST.CONF.secuNo = BANCS.INPUT.secuNo
+CUST.CONF.beneficiary = BANCS.INPUT.beneficiary
+CUST.CONF.userId = BANCS.STDIN.userId
+CUST.CONF.bankId = BANCS.STDIN.contextBankId
+print(CUST.CONF.funcCode)
+print(CUST.CONF.acctNum)
+if (CUST.CONF.acctNum == "") then
+	Sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+	Sv_u = urhk_SetOrbOut("Error_1|ERR^" + CUST.CONF.ERR000004 + "^acctNum")
+	GOTO FINISH
+endif
+if (CUST.CONF.secuNo == "")then
+	Sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+	Sv_u = urhk_SetOrbOut("Error_1|ERR^" + CUST.CONF.ERR000025 + "^secuNo")
+	GOTO FINISH
+Endif
+if (CUST.CONF.beneficiary == "")then
+	Sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+	Sv_u = urhk_SetOrbOut("Error_1|ERR^" + CUST.CONF.ERR000026 + "^beneficiary")
+	GOTO FINISH
+Endif
+if (STRLEN(CUST.CONF.secuNo) > 6)then
+	Sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+	Sv_u = urhk_SetOrbOut("Error_1|ERR^" + CUST.CONF.ERR000027 + "^secuNo")
+	GOTO FINISH
+Endif
+################### NUBAN ################################
+sv_x = urhk_getAcctDetailsInRepository(CUST.CONF.acctNum)
+print(sv_x)
+if (sv_x == "1") then
+	BANCS.INPARAM.BINDVARS = CUST.CONF.acctNum + "|" + CUST.CONF.bankId
+	sv_x = "acct|select finacle_acct_num from custom.fbn_am "
+	sv_x = sv_x +" where old_acct_num = ?SVAR and bank_id = ?SVAR"
+	print(sv_x)
+	sv_e = urhk_DbSelectWithBind(sv_x)
+	if (sv_e != "0") then
+		Sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+		Sv_u = urhk_SetOrbOut("Error_1|ERR^" + CUST.CONF.ERR000003 + "^acctNum")
+		GOTO FINISH
+	endif
+	CUST.CONF.acctNum=BANCS.OUTPARAM.acct
+	sv_x = urhk_getAcctDetailsInRepository(CUST.CONF.acctNum)
+endif
+CUST.CONF.acctName = BANCS.OUTPARAM.acctName
+sv_b = BANCS.OUTPARAM.clearBalance
+sv_t = BANCS.OUTPARAM.acctSolId
+sv_x = BANCS.OUTPARAM.acctCloseflg
+CUST.CONF.schmCode = BANCS.OUTPARAM.schmCode
+CUST.CONF.schmType = BANCS.OUTPARAM.schmType
+CUST.CONF.clrbalamt = BANCS.OUTPARAM.EffAvailableAmt
+sv_c = CUST.CONF.acctNum
+CUST.CONF.CRNCY = BANCS.OUTPARAM.acctCrncyCode
+print(CUST.CONF.CRNCY)
+CUST.CONF.freezecode = BANCS.OUTPARAM.freezeCode
+print(CUST.CONF.CRNCY)
+CUST.CONF.schm = BANCS.OUTPARAM.schmCode
+print(CUST.CONF.schm)
+print(sv_t)
+CUST.CONF.custId  = BANCS.OUTPARAM.custId
+print(CUST.CONF.custId)
+print(CUST.CONF.clrbalamt)
+
+if (sv_x == "Y") then
+	Sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+	Sv_u = urhk_SetOrbOut("Error_1|ERR^" + CUST.CONF.ERR000005 + "^acctNum")
+	GOTO FINISH
+endif
+If ((CUST.CONF.schmType != "ODA") AND (CUST.CONF.schmType != "CAA")) Then
+	Sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+	Sv_u = urhk_SetOrbOut("Error_1|ERR^" + CUST.CONF.ERR000006 + "^acctNum")
+	GOTO FINISH
+endif
+if (CUST.CONF.instNo == "")then
+	Sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+	Sv_u = urhk_SetOrbOut("Error_1|ERR^" + CUST.CONF.ERR000007 + "^instNo")
+	GOTO FINISH
+else
+	sv_r = urhk_B2k_isStringNumeric(CUST.CONF.instNo)
+	if (sv_r == "1") then
+		Sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+		Sv_u = urhk_SetOrbOut("Error_1|ERR^" + CUST.CONF.ERR000008 + "^instNo")
+		GOTO FINISH
+	Endif
+endif
+BANCS.INPARAM.AccountId = CUST.CONF.acctNum
+BANCS.INPARAM.InstrumentNumber  = CUST.CONF.instNo
+BANCS.INPARAM.InstrumentAlpha   = "!"
+sv_e = urhk_B2k_valInstrumentNumForAcct("")
+print(BANCS.OUTPARAM.ReturnCode)
+if (BANCS.OUTPARAM.ReturnCode != "0") then
+	Sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+	Sv_u = urhk_SetOrbOut("Error_1|ERR^" + CUST.CONF.ERR000009 + "^instNo")
+	GOTO FINISH
+	print(BANCS.OUTPARAM.ChqStatus)
+Endif
+if (CUST.CONF.funcCode == "A") then
+	BANCS.INPARAM.BINDVARS = CUST.CONF.acctNum + "|" + CUST.CONF.instNo + "|" + CUST.CONF.bankId
+	sv_s ="cnt,nacid,ninst,vfd_flg|select count(1),FORACID, INSTRMNT_NO, verify_flg from Custom.CHQ_CONFIRM_DET"
+	sv_s = sv_s + " where foracid = ?SVAR and INSTRMNT_NO= to_number(?SVAR) and bank_id = ?SVAR "
+	sv_s = sv_s + " and del_flg !='Y' and channel !='R'  and verify_flg='N' group by FORACID, INSTRMNT_NO,verify_flg "
+	print(sv_s)
+	sv_e = urhk_DbSelectWithBind(sv_s)
+	if (sv_e ==0) then
+		print(BANCS.OUTPARAM.cnt)
+		if (BANCS.OUTPARAM.cnt >0) then
+			if (BANCS.OUTPARAM.vfd_flg == "Y") then
+				Sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+				Sv_u = urhk_SetOrbOut("Error_1|ERR^" + CUST.CONF.ERR000010 + "^acctNum")
+				GOTO FINISH
+			endif
+			if (BANCS.OUTPARAM.vfd_flg == "N")  then
+				Sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+				Sv_u = urhk_SetOrbOut("Error_1|ERR^" + CUST.CONF.ERR000011 + "^acctNum")
+				GOTO FINISH
+			endif
+		endif
+	endif
+	BANCS.INPARAM.BINDVARS = CUST.CONF.acctNum + "|" + CUST.CONF.instNo + "|" + CUST.CONF.bankId
+	sv_s ="cnt,nacid,ninst,vfd_flg|select count(1),FORACID, INSTRMNT_NO, verify_flg from Custom.CHQ_CONFIRM_DET"
+	sv_s = sv_s + " where foracid = ?SVAR and INSTRMNT_NO= to_number(?SVAR) and bank_id = ?SVAR "
+	sv_s = sv_s + " and del_flg !='Y' and channel !='R'  group by FORACID, INSTRMNT_NO,verify_flg "
+	print(sv_s)
+	sv_e = urhk_DbSelectWithBind(sv_s)
+	if (sv_e ==0) then
+		print(BANCS.OUTPARAM.cnt)
+		if (BANCS.OUTPARAM.cnt >0) then
+			Sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+			Sv_u = urhk_SetOrbOut("Error_1|ERR^" + CUST.CONF.ERR000044 + "^acctNum")
+			GOTO FINISH
+		endif
+	endif
+	BANCS.INPARAM.AccountId = CUST.CONF.acctNum
+	BANCS.INPARAM.InstrumentNumber  = LTRIM(CUST.CONF.instNo,'0')
+	BANCS.INPARAM.InstrumentAlpha   = "!"
+	
+	sv_e = urhk_B2k_valInstrumentNumForAcct("")
+	print(BANCS.OUTPARAM.ReturnCode)
+	if (BANCS.OUTPARAM.ReturnCode == "0") then
+		print(BANCS.OUTPARAM.ChqStatus)
+		if (BANCS.OUTPARAM.ChqStatus == "P") then
+			BANCS.INPARAM.BINDVARS = CUST.CONF.acctNum + "|" + CUST.CONF.instNo + "|" + CUST.CONF.bankId
+			sv_s ="cnt|select count(*) from custom.chq_confirm_det where channel ='R' and paid_flg='C' and "
+			sv_s = sv_s + " foracid = ?SVAR and INSTRMNT_NO= to_number(?SVAR) and bank_id = ?SVAR "
+			print(sv_s)
+			sv_e=urhk_dbselectWithBind(sv_s)
+			if (sv_e ==0) then
+				if ( BANCS.OUTPARAM.cnt <1 ) then
+					Sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+					Sv_u = urhk_SetOrbOut("Error_1|ERR^" + CUST.CONF.ERR000012 + "^instNo")
+					GOTO FINISH
+				else
+					sv_a = urhk_TBAF_DispMesg("Instrument Passed Through Upload,Continue")
+				endif
+			endif
+		endif
+	else
+		sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+		Sv_u = urhk_SetOrbOut("Error_1|ERR^" + CUST.CONF.ERR000013 + "^instNo")
+		GOTO FINISH
+	endif
+endif
+if (CUST.CONF.funcCode == "A") then
+	if (CUST.CONF.beneficiary == "")then
+		Sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+		Sv_u = urhk_SetOrbOut("Error_1|ERR^" + CUST.CONF.ERR000017 + "^beneficiary")
+		GOTO FINISH
+	Endif
+	If (CUST.CONF.beneficiary != "") Then
+		sv_n = CUST.CONF.beneficiary
+		sv_i = GETPOSITION(sv_n,"'")
+		If (sv_i > 0) then
+			sv_q = SET$(sv_n,sv_i-1,1,"")
+			CUST.CONF.beneficiary = sv_q
+		endif
+		print(CUST.CONF.beneficiary)
+	endif
+endif
+if (CUST.CONF.funcCode == "A") then
+	BANCS.INPARAM.BINDVARS = CUST.CONF.acctNum + "|" + CUST.CONF.instNo + "|" + CUST.CONF.bankId
+	sv_m = "nAcctNo|select foracid from custom.CHQ_CONFIRM_DET_TBL"
+	sv_m = sv_m + " where foracid = ?SVAR"
+	sv_m = sv_m + " and INSTRMNT_NO= to_number(?SVAR) and bank_id = ?SVAR and channel !='R' and del_flg!='Y' "
+	print(sv_m)
+	sv_p = urhk_dbSelectWithBind(sv_m)
+	print(sv_p)
+	if (sv_p =="0") then
+		Sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+		Sv_u = urhk_SetOrbOut("Error_1|ERR^" + CUST.CONF.ERR000024 + "^beneficiary")
+		GOTO FINISH
+	Endif
+	print(CUST.CONF.custId)
+	#sv_a = urhk_getCustomerDetails(CUST.CONF.custId)
+	sv_a = "CustPermPhoneNum,CustComuPhoneNum1,CustComuPhoneNum2|select"
+	sv_a = sv_a + " cust_perm_phone_num,cust_comu_phone_num_1,cust_comu_phone_num_2"
+	sv_a = sv_a + " from tbaadm.cust_mast_gen_table where cust_id = '"+ CUST.CONF.custId +"'"
+	print(sv_a)
+	sv_a = urhk_dbselect(sv_a)
+	if (sv_a == 0) then
+		print(BANCS.OUTPARAM.CustPermPhoneNum)
+		print(BANCS.OUTPARAM.CustComuPhoneNum1)
+		print(BANCS.OUTPARAM.CustComuPhoneNum2)
+		
+		if (BANCS.OUTPARAM.CustPermPhoneNum != "") then
+			CUST.CONF.phoneNo = BANCS.OUTPARAM.CustPermPhoneNum
+		endif
+		if (BANCS.OUTPARAM.CustPermPhoneNum == "") then
+			CUST.CONF.phoneNo = BANCS.OUTPARAM.CustComuPhoneNum1
+		endif
+		if ((BANCS.OUTPARAM.CustPermPhoneNum != "") and (BANCS.OUTPARAM.CustPermPhoneNum == "")) then
+			CUST.CONF.phoneNo = BANCS.OUTPARAM.CustComuPhoneNum2
+		endif
+		print(CUST.CONF.phoneNo)
+	else
+		CUST.CONF.phoneNo = ""
+	endif
+	
+	Sv_u = urhk_SetOrbOut("SuccessOrFailure|Y")
+	Sv_u = urhk_setOrbOut("funcCode|" + CUST.CONF.funcCode)
+	if (CUST.CONF.acctNum != "") then
+		Sv_u = urhk_setOrbOut("acctNum|" + CUST.CONF.acctNum)
+	endif
+	if (CUST.CONF.instNo != "") then
+		Sv_u = urhk_setOrbOut("instNo|" + CUST.CONF.instNo)
+	endif
+	if (CUST.CONF.secuNo != "") then
+		Sv_u = urhk_setOrbOut("secuNo|" + CUST.CONF.secuNo)
+	endif
+	if (CUST.CONF.beneficiary != "") then
+		Sv_u = urhk_setOrbOut("beneficiary|" + CUST.CONF.beneficiary)
+	endif
+	if (CUST.CONF.phoneNo != "") then
+		Sv_u = urhk_setOrbOut("phoneNo|" + CUST.CONF.phoneNo)
+	endif
+	GOTO FINISH
+endif
+if (CUST.CONF.funcCode == "M") then
+	#print("Exact Fetch")
+	BANCS.INPARAM.BINDVARS = CUST.CONF.acctNum + "|" + CUST.CONF.instNo + "|" + CUST.CONF.bankId
+	sv_s ="cnt|select count(*) from Custom.CHQ_CONFIRM_DET where foracid = ?SVAR"
+	sv_s = sv_s + " and INSTRMNT_NO =to_number(?SVAR) and bank_id = ?SVAR and del_flg ='N' and channel !='R'"
+	sv_s = sv_s + " and verify_flg !='Y' "
+	print(sv_s)
+	sv_e = urhk_DbSelectWithBind(sv_s)
+	if (sv_e ==0) then
+		if (BANCS.OUTPARAM.cnt > 0) then
+			sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+			Sv_u = urhk_SetOrbOut("Error_1|ERR^" + CUST.CONF.ERR000014 + "^instNo")
+			GOTO FINISH
+		endif
+		if (BANCS.OUTPARAM.cnt < 1) then
+			BANCS.INPARAM.BINDVARS = CUST.CONF.acctNum + "|" + CUST.CONF.instNo + "|" + CUST.CONF.bankId
+			sv_s ="vfd_flg,beneName,instrAmt,instrDate,identifyBy,payChannel,channel,secuNo,phoneNo,fromPhone,relMgr,"
+			sv_s = sv_s + " CaptdTime|select verify_flg,BENEFICIARY,amount,INSTRMNT_DATE,id_card,"
+			sv_s = sv_s + " pay_channel,channel,SECU_NO,phone_no,CALL_RECEIVED_FROM,RCRE_USER_ID,to_char(rcre_time,'dd-mm-yyyy:hh24miss')"
+			sv_s = sv_s + " from custom.CHQ_CONFIRM_DET  where foracid = ?SVAR"
+			sv_s = sv_s + " and  INSTRMNT_NO =to_number(?SVAR) and bank_id = ?SVAR and del_flg ='N'  and channel !='R' "
+			print(sv_s)
+			sv_e = urhk_DbSelectWithBind(sv_s)
+		endif
+	endif
+	print(sv_s)
+	print(sv_e)
+	if (sv_e !=0) then
+		if (CUST.CONF.funcCode == "M") then
+			sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+			Sv_u = urhk_SetOrbOut("Error_1|ERR^" + CUST.CONF.ERR000015 + "^instNo")
+			GOTO FINISH
+		Endif
+		print(BANCS.OUTPARAM.beneName)
+		print(BANCS.OUTPARAM.secuNo)
+		print(BANCS.OUTPARAM.instrAmt)
+		print(BANCS.OUTPARAM.instrDate)
+		print(BANCS.OUTPARAM.identifyBy)
+		print(BANCS.OUTPARAM.payChannel)
+		print(BANCS.OUTPARAM.channel)
+		print(BANCS.OUTPARAM.fromPhone)
+		print(BANCS.OUTPARAM.vfd_flg)
+		print(BANCS.OUTPARAM.relMgr)
+		print(BANCS.OUTPARAM.CaptdTime)
+		#if (((CUST.CONF.Amt =="" ) or (CUST.CONF.funcCode !="M" )) Or ( (BANCS.OUTPARAM.vfd_flg =="Y") and (CUST.CONF.funcCode =="M" )) )  then
+		CUST.CONF.Bene         = BANCS.OUTPARAM.beneName
+		CUST.CONF.secuNo       = BANCS.OUTPARAM.secuNo
+		CUST.CONF.Amt          = BANCS.OUTPARAM.instrAmt
+		CUST.CONF.InstDate     = BANCS.OUTPARAM.instrDate
+		CUST.CONF.IdentifyBy   = BANCS.OUTPARAM.identifyBy
+		CUST.CONF.PayChannel   = BANCS.OUTPARAM.payChannel
+		CUST.CONF.channel      = BANCS.OUTPARAM.channel
+		CUST.CONF.ReceivedNo   = BANCS.OUTPARAM.fromPhone
+		CUST.CONF.phoneNo      = BANCS.OUTPARAM.phoneNo
+		CUST.CONF.channeldesp   =""
+		CUST.CONF.CaptdTime = BANCS.OUTPARAM.CaptdTime
+		if (((CUST.CONF.Amt =="" ) or (CUST.CONF.funcCode !="M" )) Or ((BANCS.OUTPARAM.vfd_flg =="Y") and (CUST.CONF.funcCode =="M" )) )  then
+			CUST.CONF.relMgr = BANCS.OUTPARAM.relMgr
+			BANCS.INPARAM.BINDVARS = CUST.CONF.relMgr
+			sv_s ="relamgr|select EMP_NAME from tbaadm.get where EMP_ID = ?SVAR"
+			print(sv_s)
+			sv_e = urhk_dbSelectWithBind(sv_s)
+			print(sv_e)
+			If (sv_e ==0) Then
+				print(CUST.CONF.relMgr)
+				print(BANCS.OUTPARAM.relamgr)
+				CUST.CONF.relaMgr = CUST.CONF.relMgr + "-" + BANCS.OUTPARAM.relamgr
+				print(CUST.CONF.relaMgr)
+			else
+				CUST.CONF.relaMgr = CUST.CONF.relMgr
+			Endif
+		endif
+		if ( CUST.CONF.PayChannel == "O") then
+			CUST.CONF.Paychanneldesp = "OPEN CHEQUE"
+		endif
+		if (CUST.CONF.PayChannel == "C") then
+			CUST.CONF.Paychanneldesp = "CROSSED CHEQUE"
+		endif
+		if ( CUST.CONF.channel == "P") then
+			CUST.CONF.channeldesp = "PHONE"
+		endif
+		if (CUST.CONF.channel == "L") then
+			CUST.CONF.channeldesp = "LETTER"
+		endif
+		if (CUST.CONF.channel == "R") then
+			CUST.CONF.channeldesp = "REQUEST SENT"
+		endif
+		if (CUST.CONF.channel == "O") then
+			CUST.CONF.channeldesp = "OWNER"
+		endif
+		if (CUST.CONF.channel == "E") then
+			CUST.CONF.channeldesp = "EXEMPTION"
+		endif
+		if (CUST.CONF.channel == "W") then
+			CUST.CONF.channeldesp = "ONLINE BANKING"
+		Endif
+		if (CUST.CONF.channel == "M") then
+			CUST.CONF.channeldesp = "RELATIONSHIP MGR"
+		Endif
+		
+		sv_s = "form_amount|select to_char(to_number(replace('"+ CUST.CONF.Amt +"',',','')),'999,999,999,999,999,999.99')  from dual"
+		print(sv_s)
+		sv_e = urhk_dbSelect(sv_s)
+		if (sv_e ==0) then
+			CUST.CONF.form_amount = BANCS.OUTPARAM.form_amount
+		endif
+	endif
+endif
+if (CUST.CONF.funcCode == "M")  then
+	BANCS.INPARAM.BINDVARS = CUST.CONF.acctNum + "|" + CUST.CONF.instNo + "|" + CUST.CONF.bankId
+	sv_s = "vfd_flg,paid_flg,lchg_time,rcreUser,sol,rconf,del_flg|select verify_flg,paid_flg,lchg_time,rcre_user_id,sol_id,REQUIRED_CONFIRM,del_flg from custom.CHQ_CONFIRM_DET_TBL"
+	sv_s = sv_s + " where foracid = ?SVAR"
+	sv_s = sv_s + " and  INSTRMNT_NO =to_number(?SVAR) and bank_id = ?SVAR"
+	sv_s = sv_s + " and  del_flg !='Y' and channel !='R'  "
+	print(sv_s)
+	sv_e = urhk_dbSelectWithBind(sv_s)
+	print(sv_e)
+	if (sv_e !=0) then
+		BANCS.INPARAM.BINDVARS = CUST.CONF.acctNum + "|" + CUST.CONF.instNo + "|" + CUST.CONF.bankId
+		sv_s = "vfd_flg,paid_flg,lchg_time,rcreUser,sol,rconf,del_flg|select verify_flg,paid_flg,lchg_time,rcre_user_id,sol_id,REQUIRED_CONFIRM,del_flg from"
+		sv_s = sv_s + " custom.CHQ_CONFIRM_DET_MOD_TBL where foracid =?SVAR "
+		sv_s = sv_s + " and  INSTRMNT_NO =to_number(?SVAR) and bank_id = ?SVAR "
+		sv_s = sv_s + " and  del_flg !='Y' "
+		print(sv_s)
+		sv_e = urhk_dbSelectWithBind(sv_s)
+		print(sv_e)
+	endif
+	if (BANCS.OUTPARAM.sol != BANCS.STDIN.mySolId ) then
+		sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+		Sv_u = urhk_SetOrbOut("Error_1|ERR^" + CUST.CONF.ERR000018 + "^instNo")
+		GOTO FINISH
+	endif
+	if ((CUST.CONF.funcCode =="M") and (BANCS.OUTPARAM.del_flg =="Y")) then
+		sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+		Sv_u = urhk_SetOrbOut("Error_1|ERR^" + CUST.CONF.ERR000019 + "^instNo")
+		GOTO FINISH
+	endif
+	if ((CUST.CONF.funcCode =="M") and (BANCS.OUTPARAM.vfd_flg !="Y")) then
+		if (BANCS.OUTPARAM.rcreUser != BANCS.STDIN.userId ) then
+			sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+			Sv_u = urhk_SetOrbOut("Error_1|ERR^" + CUST.CONF.ERR000020 + "^instNo")
+			GOTO FINISH
+		endif
+	endif
+endif
+if (CUST.CONF.funcCode == "X") then
+	BANCS.INPARAM.BINDVARS = CUST.CONF.acctNum + "|" + CUST.CONF.instNo + "|" + CUST.CONF.bankId
+	sv_s ="vfd_flg,beneName,instrAmt,instrDate,identifyBy,payChannel,channel,secuNo,phoneNo,fromPhone,relMgr,"
+	sv_s = sv_s + " CaptdTime|select verify_flg,BENEFICIARY,amount,INSTRMNT_DATE,id_card,"
+	sv_s = sv_s + " pay_channel,channel,SECU_NO,phone_no,CALL_RECEIVED_FROM,RCRE_USER_ID,to_char(rcre_time,'dd-mm-yyyy:hh24miss')"
+	sv_s = sv_s + " from custom.CHQ_CONFIRM_DET  where foracid =?SVAR"
+	sv_s = sv_s + " and  INSTRMNT_NO =to_number(?SVAR) and bank_id = ?SVAR and del_flg ='N'  and channel !='R' "
+	print(sv_s)
+	sv_e = urhk_DbSelectWithBind(sv_s)
+	print(sv_s)
+	print(sv_e)
+	if (sv_e !=0) then
+		if (CUST.CONF.funcCode == "X") then
+			sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+			Sv_u = urhk_SetOrbOut("Error_1|ERR^" + CUST.CONF.ERR000016 + "^instNo")
+			GOTO FINISH
+		endif
+		print(BANCS.OUTPARAM.beneName)
+		print(BANCS.OUTPARAM.secuNo)
+		print(BANCS.OUTPARAM.instrAmt)
+		print(BANCS.OUTPARAM.instrDate)
+		print(BANCS.OUTPARAM.identifyBy)
+		print(BANCS.OUTPARAM.payChannel)
+		print(BANCS.OUTPARAM.channel)
+		print(BANCS.OUTPARAM.fromPhone)
+		print(BANCS.OUTPARAM.vfd_flg)
+		print(BANCS.OUTPARAM.relMgr)
+		print(BANCS.OUTPARAM.CaptdTime)
+		#if (((CUST.CONF.Amt =="" ) or (CUST.CONF.funcCode !="M" )) Or ( (BANCS.OUTPARAM.vfd_flg =="Y") and (CUST.CONF.funcCode =="M" )) )  then
+		
+		CUST.CONF.Bene         = BANCS.OUTPARAM.beneName
+		CUST.CONF.secuNo       = BANCS.OUTPARAM.secuNo
+		CUST.CONF.Amt          = BANCS.OUTPARAM.instrAmt
+		CUST.CONF.InstDate     = BANCS.OUTPARAM.instrDate
+		CUST.CONF.IdentifyBy   = BANCS.OUTPARAM.identifyBy
+		CUST.CONF.PayChannel   = BANCS.OUTPARAM.payChannel
+		CUST.CONF.channel      = BANCS.OUTPARAM.channel
+		CUST.CONF.ReceivedNo   = BANCS.OUTPARAM.fromPhone
+		CUST.CONF.phoneNo      = BANCS.OUTPARAM.phoneNo
+		CUST.CONF.channeldesp   =""
+		CUST.CONF.CaptdTime = BANCS.OUTPARAM.CaptdTime
+		if (((CUST.CONF.Amt =="" ) or (CUST.CONF.funcCode !="M" )) Or ( (BANCS.OUTPARAM.vfd_flg =="Y") and (CUST.CONF.funcCode =="M" )) )  then
+			CUST.CONF.relMgr = BANCS.OUTPARAM.relMgr
+			BANCS.INPARAM.BINDVARS = CUST.CONF.relMgr
+			sv_s ="relamgr|select EMP_NAME from tbaadm.get where EMP_ID = ?SVAR"
+			print(sv_s)
+			sv_e = urhk_dbSelectWithBind(sv_s)
+			print(sv_e)
+			If (sv_e ==0) Then
+				print(CUST.CONF.relMgr)
+				print(BANCS.OUTPARAM.relamgr)
+				CUST.CONF.relaMgr = CUST.CONF.relMgr + "-" + BANCS.OUTPARAM.relamgr
+				print(CUST.CONF.relaMgr)
+			else
+				CUST.CONF.relaMgr = CUST.CONF.relMgr
+			Endif
+		endif
+		if ( CUST.CONF.PayChannel == "O") then
+			CUST.CONF.Paychanneldesp = "OPEN CHEQUE"
+		endif
+		if (CUST.CONF.PayChannel == "C") then
+			CUST.CONF.Paychanneldesp = "CROSSED CHEQUE"
+		endif
+		if ( CUST.CONF.channel == "P") then
+			CUST.CONF.channeldesp = "PHONE"
+		endif
+		if (CUST.CONF.channel == "L") then
+			CUST.CONF.channeldesp = "LETTER"
+		endif
+		if (CUST.CONF.channel == "R") then
+			CUST.CONF.channeldesp = "REQUEST SENT"
+		endif
+		if (CUST.CONF.channel == "O") then
+			CUST.CONF.channeldesp = "OWNER"
+		endif
+		if (CUST.CONF.channel == "E") then
+			CUST.CONF.channeldesp = "EXEMPTION"
+		endif
+		if (CUST.CONF.channel == "W") then
+			CUST.CONF.channeldesp = "ONLINE BANK"
+		Endif
+		if (CUST.CONF.channel == "M") then
+			CUST.CONF.channeldesp = "RELATIONSHIP MGR"
+		Endif
+		
+		sv_s = "form_amount|select to_char(to_number(replace('"+ CUST.CONF.Amt +"',',','')),'999,999,999,999,999,999.99')  from dual"
+		print(sv_s)
+		sv_e = urhk_dbSelect(sv_s)
+		if (sv_e ==0) then
+			CUST.CONF.form_amount = BANCS.OUTPARAM.form_amount
+		endif
+	endif
+endif
+if (CUST.CONF.funcCode == "X")  then
+	BANCS.INPARAM.BINDVARS = CUST.CONF.acctNum + "|" + CUST.CONF.instNo + "|" + CUST.CONF.bankId
+	sv_s = "vfd_flg,paid_flg,lchg_time,rcreUser,sol,rconf,del_flg|select verify_flg,paid_flg,lchg_time,rcre_user_id,sol_id,REQUIRED_CONFIRM,del_flg from"
+	sv_s = sv_s + " custom.CHQ_CONFIRM_DET_MOD_TBL where foracid = ?SVAR"
+	sv_s = sv_s + " and  INSTRMNT_NO =trim(?SVAR) and bank_id = ?SVAR "
+	sv_s = sv_s + " and  del_flg !='Y' and channel !='R'  "
+	print(sv_s)
+	sv_e = urhk_dbSelectWithBind(sv_s)
+	print(sv_e)
+	if (sv_e == 0) then
+		if ((CUST.CONF.funcCode =="X") and (BANCS.OUTPARAM.vfd_flg =="Y")) then
+			sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+			Sv_u = urhk_SetOrbOut("Error_1|ERR^" + CUST.CONF.ERR000021 + "^instNo")
+			GOTO FINISH
+		endif
+		if ((CUST.CONF.funcCode =="X") and (BANCS.OUTPARAM.del_flg =="Y")) then
+			sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+			Sv_u = urhk_SetOrbOut("Error_1|ERR^" + CUST.CONF.ERR000022 + "^instNo")
+			GOTO FINISH
+		endif
+		if ((CUST.CONF.funcCode =="X")  and (BANCS.OUTPARAM.vfd_flg !="Y")) Then
+			if (BANCS.OUTPARAM.sol != BANCS.STDIN.mySolId ) then
+				sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+				Sv_u = urhk_SetOrbOut("Error_1|ERR^" + CUST.CONF.ERR000023 + "^instNo")
+				GOTO FINISH
+			endif
+		endif
+	else 
+		sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+		Sv_u = urhk_SetOrbOut("Error_1|ERR^" + CUST.CONF.ERR000003 + "^instNo")
+		GOTO FINISH
+	endif
+endif
+BANCS.INPARAM.BINDVARS = CUST.CONF.acctNum + "|" + CUST.CONF.instNo + "|" + CUST.CONF.bankId
+sv_s = "nData1,nData2,nData3,nData4,nData5,nData6,nData7,nData8,nData9,nData10,nsol,vfd_flg|select INSTRMNT_NO, SECU_NO,PHONE_NO, BENEFICIARY, AMOUNT, INSTRMNT_DATE, ID_CARD"
+sv_s = sv_s + " ,PAY_CHANNEL, CHANNEL,Call_received_from,sol_id,verify_flg from custom.chq_confirm_det_tbl"
+sv_s= sv_s + " where foracid =?SVAR and  INSTRMNT_NO = to_number(?SVAR) and bank_id = ?SVAR and del_flg ='N' and channel !='R' "
+print(sv_s)
+sv_e = urhk_DbSelectWithBind(sv_s)
+if (sv_e !=0) then
+	BANCS.INPARAM.BINDVARS = CUST.CONF.acctNum + "|" + CUST.CONF.instNo + "|" + CUST.CONF.bankId
+	sv_s = "nData1,nData2,nData3,nData4,nData5,nData6,nData7,nData8,nData9,nData10,nsol,vfd_flg|select INSTRMNT_NO, SECU_NO,PHONE_NO, BENEFICIARY, AMOUNT, INSTRMNT_DATE,"
+	sv_s = sv_s + " ID_CARD, PAY_CHANNEL, CHANNEL,Call_received_from,sol_id,verify_flg from custom.chq_confirm_det_MOD_tbl"
+	sv_s= sv_s + " where foracid = ?SVAR and  INSTRMNT_NO = to_number(?SVAR) and bank_id = ?SVAR and del_flg ='N' and channel !='R'"
+	print(sv_s)
+	sv_e = urhk_DbSelectWithBind(sv_s)
+endif
+print(sv_e)
+if  (sv_e ==0 ) then
+	CUST.CONF.vfd_flg = BANCS.OUTPARAM.vfd_flg
+	#if (CUST.CONF.secuNo =="") then
+	CUST.CONF.instNo = BANCS.OUTPARAM.nData1
+	print(CUST.CONF.instNo)
+	CUST.CONF.secuNo = BANCS.OUTPARAM.nData2
+	print(CUST.CONF.secuNo)
+	CUST.CONF.Bene = BANCS.OUTPARAM.nData4
+	print(CUST.CONF.Bene)
+	CUST.CONF.Amt = BANCS.OUTPARAM.nData5
+	print(CUST.CONF.Amt)
+	CUST.CONF.InstDate = BANCS.OUTPARAM.nData6
+	print(CUST.CONF.InstDate)
+	CUST.CONF.IdentifyBy = BANCS.OUTPARAM.nData7
+	print(CUST.CONF.IdentifyBy)
+	CUST.CONF.PayChannel = BANCS.OUTPARAM.nData8
+	print(CUST.CONF.PayChannel)
+	CUST.CONF.channel = BANCS.OUTPARAM.nData9
+	print(CUST.CONF.channel)
+	CUST.CONF.ReceivedNo = BANCS.OUTPARAM.nData10
+	print(CUST.CONF.ReceivedNo)
+	CUST.CONF.phoneNo = BANCS.OUTPARAM.nData3
+	print(CUST.CONF.phoneNo)
+	CUST.CONF.vfd_flg = BANCS.OUTPARAM.vfd_flg
+	print(CUST.CONF.vfd_flg)
+	#Endif
+	Sv_u = urhk_SetOrbOut("SuccessOrFailure|Y")
+	Sv_u = urhk_setOrbOut("funcCode|" + CUST.CONF.funcCode)
+	if (CUST.CONF.acctNum != "") then
+		Sv_u = urhk_setOrbOut("acctNum|" + CUST.CONF.acctNum)
+	endif
+	if (CUST.CONF.instNo != "") then
+		Sv_u = urhk_setOrbOut("instNo|" + CUST.CONF.instNo)
+	endif
+	if (CUST.CONF.secuNo != "") then
+		Sv_u = urhk_setOrbOut("secuNo|" + CUST.CONF.secuNo)
+	endif
+	if	(CUST.CONF.Bene!= "") then
+		Sv_u = urhk_setOrbOut("beneficiary|" + CUST.CONF.Bene)
+	endif
+	if	(CUST.CONF.Amt!= "") then
+		Sv_u = urhk_setOrbOut("chqAmt|" + CUST.CONF.Amt)
+	endif
+	if	(CUST.CONF.InstDate!= "") then
+		Sv_u = urhk_setOrbOut("instDate|" + CUST.CONF.InstDate)
+	endif
+	if	(CUST.CONF.IdentifyBy!= "") then
+		Sv_u = urhk_setOrbOut("identifyBy|" + CUST.CONF.IdentifyBy)
+	endif
+	if	(CUST.CONF.PayChannel!= "") then
+		Sv_u = urhk_setOrbOut("payChannel|" + CUST.CONF.PayChannel)
+	endif
+	if	(CUST.CONF.ReceivedNo!= "") then
+		Sv_u = urhk_setOrbOut("receivedNo|" + CUST.CONF.ReceivedNo)
+	endif
+	if	(CUST.CONF.channel!= "") then
+		Sv_u = urhk_setOrbOut("delChannel|" + CUST.CONF.channel)
+	endif
+	if	(CUST.CONF.phoneNo!= "") then
+		Sv_u = urhk_setOrbOut("phoneNo|" + CUST.CONF.phoneNo)
+	endif
+	GOTO FINISH
+endif
+FINISH:
+	DELETECLASS("CUST", "CONF")
+	EXITSCRIPT
+	trace off
+end-->

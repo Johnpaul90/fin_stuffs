@@ -1,0 +1,150 @@
+<--start
+trace on
+sv_u = urhk_B2k_printRepos("CUST")
+print(sv_u)
+
+sv_a = REPEXISTS("CUST")
+if (sv_a == 0) then
+	CREATEREP("CUST")
+endif
+
+sv_a = CLASSEXISTS("CUST","DATA")
+if (sv_a == 0) then
+	CREATECLASS("CUST","DATA",5)
+endif
+
+if (BANCS.STDIN.languageCode == "INFENG") then
+	CUST.DATA.ERR000022 = "ERR - Problem getting ADVISING BANK ACCOUNT.Please contact Administrator"
+	CUST.DATA.ERR000023 = "ERR - Problem Creating Transaction"
+	CUST.DATA.ERR000024 = "Record verified Successfully"
+endif
+
+if (BANCS.STDIN.languageCode == "FRENCH") then
+	CUST.DATA.ERR000022 = "ERR - Problem getting ADVISING BANK ACCOUNT.Please contact Administrator"
+	CUST.DATA.ERR000023 = "ERR - Problem Creating Transaction"
+	CUST.DATA.ERR000024 = "Record verified Successfully"
+endif
+
+
+sv_a=urhk_SRV_GetVal("billCritDtls.funcCode")
+sv_e=BANCS.OUTPARAM.srvValue
+print(sv_e)
+CUST.DATA.funcCode = sv_e
+print(CUST.DATA.funcCode)
+
+
+sv_a=urhk_SRV_GetVal("impBillGenDtls.billGenDtls.billAmt")
+sv_e=BANCS.OUTPARAM.srvValue
+print(sv_e)
+CUST.DATA.billAmt = sv_e
+print(CUST.DATA.billAmt)
+
+sv_a=urhk_SRV_GetVal("billCritDtls.billId")
+sv_e=BANCS.OUTPARAM.srvValue
+print(sv_e)
+CUST.DATA.billId = sv_e
+print(CUST.DATA.billId)
+
+sv_a=urhk_SRV_GetVal("billCritDtls.billCrncy.crncyCode")
+sv_e=BANCS.OUTPARAM.srvValue
+print(sv_e)
+CUST.DATA.tranCrncy= sv_e
+print(CUST.DATA.tranCrncy)
+
+sv_a=urhk_SRV_GetVal("impBillGenDtls.billGenDtls.rateCode.refCode")
+sv_e=BANCS.OUTPARAM.srvValue
+print(sv_e)
+CUST.DATA.rateCode= sv_e
+print(CUST.DATA.rateCode)
+
+sv_a=urhk_SRV_GetVal("impBillGenDtls.billGenDtls.rate")
+sv_e=BANCS.OUTPARAM.srvValue
+print(sv_e)
+CUST.DATA.rate= sv_e
+print(CUST.DATA.rate)
+
+sv_a=urhk_SRV_GetVal("billPartyDtls.billDrwBnkDtls.bankBranchId.brCode")
+sv_e=BANCS.OUTPARAM.srvValue
+print(sv_e)
+CUST.DATA.billDrwBnkBrcode= sv_e
+print(CUST.DATA.billDrwBnkBrcode)
+
+sv_a=urhk_SRV_GetVal("billPartyDtls.billDrwBnkDtls.bankBranchId.bankCode")
+sv_e=BANCS.OUTPARAM.srvValue
+print(sv_e)
+CUST.DATA.billDrwBnkCode= sv_e
+print(CUST.DATA.billDrwBnkCode)
+
+sv_a=urhk_SRV_GetVal("billCritDtls.underDC")
+sv_e=BANCS.OUTPARAM.srvValue
+print(sv_e)
+CUST.DATA.underDC= sv_e
+print(CUST.DATA.underDC)
+
+if (CUST.DATA.underDC == "Y")then
+
+	sv_o = "billDrwBkMir|SELECT MIRROR_ACCT_BACID FROM tbaadm.namt WHERE BANK_CODE = '" +CUST.DATA.billDrwBnkCode+ "'" 
+	sv_o = sv_o + " AND BR_CODE = '" +CUST.DATA.billDrwBnkBrcode+ "'"
+	sv_o = sv_o + " and CRNCY_CODE = '" +CUST.DATA.tranCrncy+ "' AND ENTITY_CRE_FLG = 'Y' AND DEL_FLG = 'N' AND BANK_ID = '"+ BANCS.STDIN.contextBankId +"'"
+	print(sv_o)
+	sv_d = urhk_dbSelect(sv_o)
+	print(sv_d)
+	if(sv_d == 0) then
+		CUST.DATA.billDrwBkMir = BANCS.OUTPARAM.billDrwBkMir
+	else
+		sv_u = urhk_SRV_SetErr(CUST.DATA.ERR000022)
+	endif
+	
+	print(CUST.DATA.billDrwBkMir)
+	CUST.DATA.solId=BANCS.STDIN.mySolId
+	print(CUST.DATA.solId)
+	sv_o = "drwBkAcct|select foracid from tbaadm.gam where bacid ='"+ CUST.DATA.billDrwBkMir +"' and "
+	sv_o = sv_o + " acct_crncy_code ='" +CUST.DATA.tranCrncy+ "' and sol_id ='999'"
+	sv_o = sv_o + " AND BANK_ID = '"+ BANCS.STDIN.contextBankId +"'"
+	print(sv_o)
+	sv_d = urhk_dbSelect(sv_o)
+	print(sv_d)
+	if(sv_d == 0) then
+		CUST.DATA.drwBkAcct = BANCS.OUTPARAM.drwBkAcct
+	else
+		Sv_u = urhk_SRV_SetErr(CUST.DATA.ERR000022)
+	endif
+	print (CUST.DATA.drwBkAcct)
+	
+	print (CUST.DATA.drwBkAcct)
+	print(CUST.DATA.tranCrncy)
+	print(CUST.DATA.billAmt)
+	print(CUST.DATA.rate)
+	print(CUST.DATA.rateCode)
+	print(CUST.DATA.billId)
+	
+	
+	sv_o= STRLEN (CUST.DATA.billAmt)
+	print(sv_o)
+	sv_b="."
+	sv_c=getposition (CUST.DATA.billAmt,sv_b)
+	print(sv_c)
+	CUST.DATA.billAmt= MID$(CUST.DATA.billAmt, 0, sv_c - 1)
+	print(CUST.DATA.billAmt)
+	
+	sv_b = "exebatch babx4061 0 miinRevMtt.scr "+ CUST.DATA.drwBkAcct+" "+CUST.DATA.tranCrncy
+	sv_b = sv_b + " "+ CUST.DATA.billAmt+" "+CUST.DATA.rate+" "+CUST.DATA.rateCode
+	sv_b = sv_b + " "+ CUST.DATA.billId
+	print(sv_b)
+	sv_c = system(sv_b)
+	print(sv_c)
+	if (sv_c != "0") then 
+		Sv_u = urhk_SRV_SetErr(CUST.DATA.ERR000023)
+	else
+		sv_u = urhk_SetOrbOut("RESULT_MSG|" + CUST.DATA.ERR000024)
+			print(sv_u)
+	endif
+
+
+endif
+
+
+
+EXITSCRIPT
+trace off
+end-->

@@ -1,0 +1,80 @@
+<--START
+TRACE ON
+
+#---------------------------------------------------
+# Create the necessary repositories and classes
+#---------------------------------------------------
+
+IF (REPEXISTS("FBN") == 0 ) THEN
+#{
+	CREATEREP("FBN")
+#}
+ENDIF
+
+
+IF (CLASSEXISTS("FBN","DATA") == 0) THEN
+#{
+	CREATECLASS("FBN","DATA",5)
+#}
+ENDIF
+
+IF (FIELDEXISTS(BANCS.INPUT.userId) == 1) THEN
+
+#{
+
+	FBN.DATA.userId = BANCS.INPUT.userId
+
+#}
+
+ENDIF
+
+print(BANCS.STDIN.userId)
+
+
+#-------------------------
+#Validating input userid
+#-------------------------
+sv_q = "userName|select user_name from SSOADM.USER_PROFILE_TBL  "
+sv_q = sv_q + " where user_id = ?SVAR and del_flg !='Y' and home_entity = '"+ BANCS.STDIN.contextBankId +"'"
+
+BANCS.INPARAM.BINDVARS = FBN.DATA.userId 
+print(BANCS.INPARAM.BINDVARS)
+
+sv_d = urhk_dbSelectWithBind(sv_q)
+print(sv_d)
+
+IF (sv_d != "0") THEN 
+#{
+         sv_z = urhk_SetOrbOut("SuccessOrFailure|N")
+         print(sv_z)
+         sv_z = urhk_SetOrbOut("Error|Invalid User Id")
+         print(sv_z)
+	   	 EXITSCRIPT
+
+#}
+ELSE
+#{
+	FBN.DATA.userName = BANCS.OUTPARAM.userName
+	sv_z = urhk_SetOrbOut("SuccessOrFailure|S")
+	print(sv_z)
+	IF(FBN.DATA.userName != "")THEN
+	#{
+
+		sv_z = urhk_SetOrbOut("userName|"+FBN.DATA.userName)
+		print(sv_z)
+	#}
+	ELSE
+	#{
+		sv_z = urhk_SetOrbOut("userName| ")
+		print(sv_z)
+	#}
+	ENDIF
+
+#}
+ENDIF
+
+
+
+TRACE OFF
+EXITSCRIPT
+END-->

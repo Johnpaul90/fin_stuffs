@@ -1,0 +1,78 @@
+<--START
+TRACE ON
+#============================================================
+# Source Name:-   COTFetchAcctName.scr
+# Date:-          16-June-2016
+# Description:-   COT Eligible Account Name Fetch
+# Author :-       Alpha - Plus Technologies & Services Ltd
+#                 Louis C.
+# Bank :-         First Bank GAMBIA
+#=============================================================
+
+#---------------------------------------------------
+# Create the necessary repositories and classes
+#---------------------------------------------------
+IF (REPEXISTS("FBN") == 0 ) THEN
+#{
+	CREATEREP("FBN")
+#}
+ENDIF
+IF (CLASSEXISTS("FBN","DATA") == 0) THEN
+#{
+	CREATECLASS("FBN","DATA",5)
+#}
+ENDIF
+IF (FIELDEXISTS(BANCS.INPUT.acctNum) == 1) THEN
+#{
+	FBN.DATA.acctNum = BANCS.INPUT.acctNum
+#}
+
+ENDIF
+print(FBN.DATA.acctNum)
+#-------------------------
+#Validating input acctid
+#-------------------------
+sv_q = "acctName|select acct_name from tbaadm.GAM  "
+sv_q = sv_q + " where foracid = ?SVAR and del_flg !='Y' And entity_cre_flg='Y'"
+
+BANCS.INPARAM.BINDVARS = FBN.DATA.acctNum 
+print(BANCS.INPARAM.BINDVARS)
+
+sv_d = urhk_dbSelectWithBind(sv_q)
+print(sv_d)
+
+IF (sv_d != "0") THEN 
+#{
+         sv_z = urhk_SetOrbOut("SuccessOrFailure|N")
+         print(sv_z)
+         sv_z = urhk_SetOrbOut("Error|Invalid Account Id")
+         print(sv_z)
+	   	 EXITSCRIPT
+
+#}
+ELSE
+#{
+	FBN.DATA.acctName = BANCS.OUTPARAM.acctName
+	sv_z = urhk_SetOrbOut("SuccessOrFailure|S")
+	print(sv_z)
+	IF(FBN.DATA.acctName != "")THEN
+	#{
+
+		sv_z = urhk_SetOrbOut("acctName|"+FBN.DATA.acctName)
+		print(sv_z)
+	#}
+	ELSE
+	#{
+		sv_z = urhk_SetOrbOut("acctName| ")
+		print(sv_z)
+	#}
+	ENDIF
+
+#}
+ENDIF
+
+
+
+TRACE OFF
+EXITSCRIPT
+END-->

@@ -1,0 +1,539 @@
+<--start
+trace on
+sv_s = urhk_b2k_PrintRepos("BANCS")
+######################################################################################
+# Source Name : termtmn001.scr
+# Date: 01-02-2012
+# Description  : This script is called on the click of Go button on criteria
+# Called Script  : None
+# Calling Script  : None
+# Author  : Abisola Badmus
+# Bank : FIRST BANK
+# Modification History       :
+# < Version No.> <Date> <Author Name>  <Description>
+#  0.1     01-FEB-2012  Abisola Badmus  Draft Version
+########################################################################################
+
+sv_a = REPEXISTS("CUST")
+if (sv_a == 0) then
+	CREATEREP("CUST")
+endif
+
+sv_a = CLASSEXISTS("CUST","TERMT")
+if (sv_a == 0) then
+        CREATECLASS("CUST", "TERMT", 5)
+endif
+
+IF (BANCS.STDIN.languageCode == "INFENG") THEN
+	CUST.TERMT.ERR000001 = "Database error"
+	CUST.TERMT.ERR000002 = "This ATM Term ID already exist!"
+	CUST.TERMT.ERR000003 = "This Term ID  is pending Addition Verification! Please Verify first."
+	CUST.TERMT.ERR000004 = "This Term ID is pending Modification Verification! Please Verify first."
+	CUST.TERMT.ERR000005 = "This Term ID is pending Deletion Verification! Please Verify first."
+	CUST.TERMT.ERR000006 = "This Term ID is pending Undeletion Verification! Please Verify first."
+	CUST.TERMT.ERR000007 = "ATM Till Account Not created! See FINCON for Account creation"
+	CUST.TERMT.ERR000008 = "ATM Fee Account Not created! See FINCON for Account creation"
+	CUST.TERMT.ERR000009 = "Record Added, but pending Verification"
+	CUST.TERMT.ERR000010 = "This Till Account has been assigned to the Term ID"
+	CUST.TERMT.ERR000011 = "This Fee Account has been assigned to the Term ID"
+	CUST.TERMT.ERR000012 = "Category Class for ATM machine Setup must be 'N'"
+	CUST.TERMT.ERR000013 = "SOL ID Mismatch! Term ID SOL should tally with Till Account SOL."
+	CUST.TERMT.ERR000014 = "This Till Account is not meant for this Term ID !"
+	CUST.TERMT.ERR000015 = "This Fee Account is not meant for this Term ID !"
+	CUST.TERMT.ERR000016 = "!Valid Values for Cat Class are 'A', 'B', 'C' or 'N'"
+	CUST.TERMT.ERR000017 = "This  Term ID do not exist!"
+	CUST.TERMT.ERR000018 = "Addition of this Term Id is pending Verification!"
+	CUST.TERMT.ERR000019 = "Modification of this  Term ID is pending Verification!"
+	CUST.TERMT.ERR000020 = "Deletion of this  Term ID is pending Verification!"
+	CUST.TERMT.ERR000021 = "Undeletion of this  Term ID is pending Verification!"
+	CUST.TERMT.ERR000022 = "This Term ID has been Deleted!"
+	CUST.TERMT.ERR000023 = "SOL ID Mismatch! Term ID SOL should tally with Fee Account SOL."
+	CUST.TERMT.ERR000024 = "This Term ID has not been Deleted!"
+	CUST.TERMT.ERR000025 = "Same User Verification! You cannot Verify the same Term ID that you Added/Modified/Deleted/Undeleted."
+	CUST.TERMT.ERR000026 = "This Term ID does not exists, and need no Verification."
+	CUST.TERMT.ERR000027 = "Terminal Id cannot be null"
+	CUST.TERMT.ERR000028 = "Terminal Id already exist"
+ENDIF
+
+
+
+CUST.TERMT.funcCode = BANCS.INPUT.funcCode
+print(CUST.TERMT.funcCode)
+CUST.TERMT.terminal = BANCS.INPUT.terminal
+print(CUST.TERMT.terminal)
+CUST.TERMT.termId = BANCS.INPUT.termId
+print(CUST.TERMT.termId)
+CUST.TERMT.tillacctNum  = BANCS.INPUT.tillacctNum
+print(CUST.TERMT.tillacctNum)
+CUST.TERMT.feeacctNum1 = BANCS.INPUT.feeacctNum1
+print(CUST.TERMT.feeacctNum1)
+CUST.TERMT.feeacctNum2 = BANCS.INPUT.feeacctNum2
+print(CUST.TERMT.feeacctNum2)
+CUST.TERMT.amtuBand = BANCS.INPUT.amtuBand
+print(CUST.TERMT.amtuBand)
+CUST.TERMT.flatRate = BANCS.INPUT.flatRate
+print(CUST.TERMT.flatRate)
+CUST.TERMT.catClass = BANCS.INPUT.catClass
+print(CUST.TERMT.catClass)
+CUST.TERMT.percent = BANCS.INPUT.percent
+print(CUST.TERMT.percent)
+
+if (CUST.TERMT.termId =="") then
+	sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+	sv_x = urhk_SetOrbOut("Error_1|ERR^" + CUST.TERMT.ERR000027 + "^termId")
+	GOTO END_OF_SCRIPT
+endif
+###############################ATM_PROCESS################################################
+##########################################################################################
+#                        ATM PROCESS :function A                                         #
+##########################################################################################
+ATM_PROCESS:
+if ((CUST.TERMT.terminal == "ATM") and (CUST.TERMT.funcCode == "A")) then
+	BANCS.INPARAM.BINDVARS = CUST.TERMT.termId +"|"+ BANCS.STDIN.contextBankId
+	sv_m = "cor|SELECT Term_id FROM tbaadm.terminal_table"
+	sv_m = sv_m + " WHERE Term_id = ?SVAR and bank_id=?SVAR"
+	sv_m = sv_m + " And Rownum < 2"
+	print(sv_m)
+	sv_p = urhk_dbSelectWithBind(sv_m)
+	print(sv_p)
+	if (sv_p == 0) then
+		sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+		sv_x = urhk_SetOrbOut("Error_1|ERR^" + CUST.TERMT.ERR000002 + "^termId")
+		GOTO END_OF_SCRIPT
+	endif
+	sv_u = urhk_SetOrbOut("SuccessOrFailure|Y")
+	GOTO END_OF_SCRIPT
+endif
+##########################################################################################
+#                    ATM PROCESS :function I                                             #
+##########################################################################################
+if ((CUST.TERMT.terminal == "ATM") and (CUST.TERMT.funcCode == "I")) then
+	BANCS.INPARAM.BINDVARS = CUST.TERMT.termId +"|"+ BANCS.STDIN.contextBankId
+	sv_m = "v_Till_Acct_No, v_Fee_Act_No1, v_Fee_Act_No2, v_Amt_Upp_Band, v_Flat_Rate, v_Cat_Classif, v_Percent, v_DelFlg|SELECT "
+	sv_m = sv_m + " Till_Acct_No, Fee_Act_No1, Fee_Act_No2, Amt_Upp_Band, Flat_Rate, Cat_Classif, Percent, Del_Flg FROM Tbaadm.Terminal_Table"
+	sv_m = sv_m + " WHERE Term_Id = ?SVAR and bank_id=?SVAR"
+	sv_m = sv_m + " And Rownum < 2"
+	print(sv_m)
+	sv_p = urhk_dbSelectWithBind(sv_m)
+	print(sv_p)
+	if (sv_p != 0) Then
+		sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+		sv_x = urhk_SetOrbOut("Error_1|ERR^" + CUST.TERMT.ERR000017 + "^termId")
+		GOTO END_OF_SCRIPT
+	endif
+	CUST.TERMT.tillacctNum = BANCS.OUTPARAM.v_Till_Acct_No
+	print(CUST.TERMT.tillacctNum)
+	CUST.TERMT.feeacctNum1 = BANCS.OUTPARAM.v_Fee_Act_No1
+	print(CUST.TERMT.feeacctNum1)
+	CUST.TERMT.feeacctNum2 = BANCS.OUTPARAM.v_Fee_Act_No2
+	print(CUST.TERMT.feeacctNum2)
+	CUST.TERMT.amtuBand = BANCS.OUTPARAM.v_Amt_Upp_Band
+	print(CUST.TERMT.amtuBand)
+	CUST.TERMT.flatRate = BANCS.OUTPARAM.v_Flat_Rate
+	print(CUST.TERMT.flatRate)
+	CUST.TERMT.catClass = BANCS.OUTPARAM.v_Cat_Classif
+	print(CUST.TERMT.catClass)
+	CUST.TERMT.percent = BANCS.OUTPARAM.v_Percent
+	print(CUST.TERMT.percent)
+	CUST.TERMT.delFlg = BANCS.OUTPARAM.v_DelFlg
+	print(CUST.TERMT.delFlg)
+
+	if (CUST.TERMT.delFlg == "Y") Then
+		sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+		sv_x = urhk_SetOrbOut("Error_1|ERR^" + CUST.TERMT.ERR000022 + "^termId")
+		GOTO END_OF_SCRIPT
+	endif
+	sv_u = urhk_SetOrbOut("SuccessOrFailure|Y")
+	GOTO FETCH_RECORDA
+endif
+##########################################################################################
+#                       ATM PROCESS :function M                                          #
+##########################################################################################
+if ((CUST.TERMT.terminal == "ATM") and (CUST.TERMT.funcCode == "M")) then
+	BANCS.INPARAM.BINDVARS = CUST.TERMT.termId +"|"+ BANCS.STDIN.contextBankId
+	sv_m = "v_Term_Id, v_Till_Acct_No, v_Fee_Act_No1, v_Fee_Act_No2, v_Amt_Upp_Band, v_Flat_Rate, v_Cat_Classif, v_Percent, v_DelFlg|SELECT Term_Id,"
+	sv_m = sv_m + " Till_Acct_No, Fee_Act_No1, Fee_Act_No2, Amt_Upp_Band, Flat_Rate, Cat_Classif, Percent, Del_Flg FROM Tbaadm.Terminal_Table"
+	sv_m = sv_m + " WHERE Term_Id = ?SVAR and bank_id=?SVAR"
+	sv_m = sv_m + " And Rownum < 2"
+	print(sv_m)
+	sv_p = urhk_dbSelectWithBind(sv_m)
+	print(sv_p)
+	if (sv_p != 0) Then
+		sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+		sv_x = urhk_SetOrbOut("Error_1|ERR^" + CUST.TERMT.ERR000017 + "^termId")
+		GOTO END_OF_SCRIPT
+	endif
+	CUST.TERMT.tillacctNum = BANCS.OUTPARAM.v_Till_Acct_No
+	print(CUST.TERMT.tillacctNum)
+	CUST.TERMT.feeacctNum1 = BANCS.OUTPARAM.v_Fee_Act_No1
+	print(CUST.TERMT.feeacctNum1)
+	CUST.TERMT.feeacctNum2 = BANCS.OUTPARAM.v_Fee_Act_No2
+	print(CUST.TERMT.feeacctNum2)
+	CUST.TERMT.amtuBand = BANCS.OUTPARAM.v_Amt_Upp_Band
+	print(CUST.TERMT.amtuBand)
+	CUST.TERMT.flatRate = BANCS.OUTPARAM.v_Flat_Rate
+	print(CUST.TERMT.flatRate)
+	CUST.TERMT.catClass = BANCS.OUTPARAM.v_Cat_Classif
+	print(CUST.TERMT.catClass)
+	CUST.TERMT.percent = BANCS.OUTPARAM.v_Percent
+	print(CUST.TERMT.percent)
+	CUST.TERMT.delFlg = BANCS.OUTPARAM.v_DelFlg
+	print(CUST.TERMT.delFlg)
+
+	if (CUST.TERMT.delFlg == "Y") Then
+		sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+		sv_x = urhk_SetOrbOut("Error_1|ERR^" + CUST.TERMT.ERR000022 + "^termId")
+		GOTO END_OF_SCRIPT
+	endif
+	sv_u = urhk_SetOrbOut("SuccessOrFailure|Y")
+	GOTO FETCH_RECORDA
+endif
+##########################################################################################
+#                          ATM PROCESS :function D                                       #
+##########################################################################################
+if ((CUST.TERMT.terminal == "ATM") and (CUST.TERMT.funcCode == "D")) then
+	BANCS.INPARAM.BINDVARS = CUST.TERMT.termId +"|"+ BANCS.STDIN.contextBankId
+	sv_m = "v_Term_Id, v_Till_Acct_No, v_Fee_Act_No1, v_Fee_Act_No2, v_Amt_Upp_Band, v_Flat_Rate, v_Cat_Classif, v_Percent, v_DelFlg|SELECT Term_Id,"
+	sv_m = sv_m + " Till_Acct_No, Fee_Act_No1, Fee_Act_No2, Amt_Upp_Band, Flat_Rate, Cat_Classif, Percent, Del_Flg FROM Tbaadm.Terminal_Table"
+	sv_m = sv_m + " WHERE Term_Id = ?SVAR and bank_id=?SVAR"
+	sv_m = sv_m + " And Rownum < 2"
+	print(sv_m)
+	sv_p = urhk_dbSelectWithBind(sv_m)
+	print(sv_p)
+	if (sv_p != 0) Then
+		sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+		sv_x = urhk_SetOrbOut("Error_1|ERR^" + CUST.TERMT.ERR000017 + "^termId")
+		GOTO END_OF_SCRIPT
+	endif
+	CUST.TERMT.tillacctNum = BANCS.OUTPARAM.v_Till_Acct_No
+	print(CUST.TERMT.tillacctNum)
+	CUST.TERMT.feeacctNum1 = BANCS.OUTPARAM.v_Fee_Act_No1
+	print(CUST.TERMT.feeacctNum1)
+	CUST.TERMT.feeacctNum2 = BANCS.OUTPARAM.v_Fee_Act_No2
+	print(CUST.TERMT.feeacctNum2)
+	CUST.TERMT.amtuBand = BANCS.OUTPARAM.v_Amt_Upp_Band
+	print(CUST.TERMT.amtuBand)
+	CUST.TERMT.flatRate = BANCS.OUTPARAM.v_Flat_Rate
+	print(CUST.TERMT.flatRate)
+	CUST.TERMT.catClass = BANCS.OUTPARAM.v_Cat_Classif
+	print(CUST.TERMT.catClass)
+	CUST.TERMT.percent = BANCS.OUTPARAM.v_Percent
+	print(CUST.TERMT.percent)
+	CUST.TERMT.delFlg = BANCS.OUTPARAM.v_DelFlg
+	print(CUST.TERMT.delFlg)
+
+	if (CUST.TERMT.delFlg == "Y") Then
+		sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+		sv_x = urhk_SetOrbOut("Error_1|ERR^" + CUST.TERMT.ERR000022 + "^termId")
+		GOTO END_OF_SCRIPT
+	endif	
+   sv_u = urhk_SetOrbOut("SuccessOrFailure|Y")
+   GOTO FETCH_RECORDA
+endif
+##########################################################################################
+#			Displaying records for ATM process				 #
+##########################################################################################
+FETCH_RECORDA:
+IF ((CUST.TERMT.terminal == "ATM") and ((CUST.TERMT.funcCode == "I") or (CUST.TERMT.funcCode == "D") or (CUST.TERMT.funcCode == "M"))) then
+	BANCS.INPARAM.BINDVARS = CUST.TERMT.termId +"|"+ BANCS.STDIN.contextBankId
+	sv_m = "v_Term_Id, v_Till_Acct_No, v_Fee_Act_No1, v_Fee_Act_No2, v_Amt_Upp_Band, v_Flat_Rate, v_Cat_Classif, v_Percent, v_DelFlg|SELECT Term_Id,"
+	sv_m = sv_m + " Till_Acct_No, Fee_Act_No1, Fee_Act_No2, Amt_Upp_Band, Flat_Rate, Cat_Classif, Percent, Del_Flg FROM Tbaadm.Terminal_Table"
+	sv_m = sv_m + " WHERE Term_Id = ?SVAR and bank_id=?SVAR"
+	sv_m = sv_m + " And Rownum < 2"
+	print(sv_m)
+	sv_p = urhk_dbSelectWithBind(sv_m)
+	print(sv_p)
+	if (sv_p == 0) then
+		if (BANCS.OUTPARAM.v_Till_Acct_No != "")then
+			CUST.TERMT.tillacctNum = BANCS.OUTPARAM.v_Till_Acct_No
+			print(CUST.TERMT.tillacctNum)
+		else
+			CUST.TERMT.tillacctNum = " "
+		endif
+
+		if (BANCS.OUTPARAM.v_Fee_Act_No1 != "")then
+			CUST.TERMT.feeacctNum1 = BANCS.OUTPARAM.v_Fee_Act_No1
+			print(CUST.TERMT.feeacctNum1)
+		else
+			CUST.TERMT.feeacctNum1 = " "
+		endif
+		if (BANCS.OUTPARAM.v_Fee_Act_No2 != "")then
+			CUST.TERMT.feeacctNum2 = BANCS.OUTPARAM.v_Fee_Act_No2
+			print(CUST.TERMT.feeacctNum2)
+		else
+			CUST.TERMT.feeacctNum2 = " "
+		endif
+		if (BANCS.OUTPARAM.v_Amt_Upp_Band != "")then
+			CUST.TERMT.amtuBand = BANCS.OUTPARAM.v_Amt_Upp_Band
+			print(CUST.TERMT.amtuBand)
+		else
+			CUST.TERMT.amtuBand = " "
+		endif
+		if (BANCS.OUTPARAM.v_Flat_Rate != "")then
+			CUST.TERMT.flatRate = BANCS.OUTPARAM.v_Flat_Rate
+			print(CUST.TERMT.flatRate)
+		else
+			CUST.TERMT.flatRate = " "
+		endif
+		if (BANCS.OUTPARAM.v_Cat_Classif != "")then
+			CUST.TERMT.catClass = BANCS.OUTPARAM.v_Cat_Classif
+			print(CUST.TERMT.catClass)
+		else
+			CUST.TERMT.catClass = " "
+		endif
+		if (BANCS.OUTPARAM.v_Percent != "")then
+			CUST.TERMT.percent = BANCS.OUTPARAM.v_Percent
+			print(CUST.TERMT.percent)
+		else
+			CUST.TERMT.percent = " "
+		endif
+	Else
+		sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+ 		sv_o = urhk_SetOrbOut("Error_1|ERR^" + CUST.TERMT.ERR000001 + "^termId")
+		GOTO END_OF_SCRIPT
+	endif
+#########################################################################################
+#		Displaying records for the criteria page				#
+#########################################################################################
+	sv_a = urhk_setOrbOut("funcCode|" + CUST.TERMT.funcCode)
+	sv_a = urhk_setOrbOut("terminal|" + CUST.TERMT.terminal)
+	sv_a = urhk_setOrbOut("termId|" + CUST.TERMT.termId)
+	sv_a = urhk_setOrbOut("tillacctNum|" + CUST.TERMT.tillacctNum)
+	sv_a = urhk_setOrbOut("feeacctNum1|" + CUST.TERMT.feeacctNum1)
+	sv_a = urhk_setOrbOut("feeacctNum2|" + CUST.TERMT.feeacctNum2)
+	sv_a = urhk_setOrbOut("amtuBand|" + CUST.TERMT.amtuBand)
+	sv_a = urhk_setOrbOut("flatRate|" + CUST.TERMT.flatRate)
+	sv_a = urhk_setOrbOut("catClass|" + CUST.TERMT.catClass)
+	sv_a = urhk_setOrbOut("percent|" + CUST.TERMT.percent)
+EXITSCRIPT
+ENDIF
+##########################################################################################
+#					POS PROCESS					 #
+##########################################################################################
+#				POS PROCESS :function A					 #
+##########################################################################################
+POS_PROCESS:
+if ((CUST.TERMT.terminal == "POS") and (CUST.TERMT.funcCode == "A")) then
+	BANCS.INPARAM.BINDVARS = CUST.TERMT.termId +"|"+ BANCS.STDIN.contextBankId
+	sv_m = "cor|SELECT Term_id FROM Tbaadm.Pos_Terminal_Id WHERE Term_id = ?SVAR and bank_id=?SVAR"
+	sv_m = sv_m + " And Rownum < 2"
+	print(sv_m)
+	sv_p = urhk_dbSelectWithBind(sv_m)
+	print(sv_p)
+	if (sv_p == 0) Then
+		sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+		sv_x = urhk_SetOrbOut("Error_1|ERR^" + CUST.TERMT.ERR000028 + "^posBr")
+		GOTO END_OF_SCRIPT
+	endif
+   sv_u = urhk_SetOrbOut("SuccessOrFailure|Y")
+   GOTO END_OF_SCRIPT	
+endif
+##########################################################################################
+#				POS PROCESS :function I					 #	
+##########################################################################################
+if ((CUST.TERMT.terminal == "POS") and (CUST.TERMT.funcCode == "I")) then
+	BANCS.INPARAM.BINDVARS = CUST.TERMT.termId +"|"+ BANCS.STDIN.contextBankId
+	sv_m = "v_Term_Id, v_Till_Acct_No, v_Fee_Act_No1, v_Fee_Act_No2, v_Amt_Upp_Band, v_Flat_Rate, v_Cat_Classif, v_Percent, v_DelFlg|SELECT Term_Id, Till_Acct_No,"
+	sv_m = sv_m + "Fee_Act_No1, Fee_Act_No2, Amt_Upp_Band, Flat_Rate, Cat_Classif, Percent, Del_Flg FROM Tbaadm.Pos_Terminal_Id "
+	sv_m = sv_m + " WHERE Term_Id = ?SVAR and bank_id=?SVAR"
+	sv_m = sv_m + " And Rownum < 2"
+	print(sv_m)
+	sv_p = urhk_dbSelectWithBind(sv_m)
+	print(sv_p)
+	if (sv_p != 0) Then
+		sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+		sv_x = urhk_SetOrbOut("Error_1|ERR^" + CUST.TERMT.ERR000017 + "^termId")
+		GOTO END_OF_SCRIPT
+	endif
+	CUST.TERMT.tillacctNum = BANCS.OUTPARAM.v_Till_Acct_No
+	print(CUST.TERMT.tillacctNum)
+	CUST.TERMT.feeacctNum1 = BANCS.OUTPARAM.v_Fee_Act_No2
+	print(CUST.TERMT.feeacctNum1)
+	CUST.TERMT.feeacctNum2 = BANCS.OUTPARAM.v_Fee_Act_No2
+	print(CUST.TERMT.feeacctNum2)
+	CUST.TERMT.amtuBand = BANCS.OUTPARAM.v_Amt_Upp_Band
+	print(CUST.TERMT.amtuBand)
+	CUST.TERMT.flatRate = BANCS.OUTPARAM.v_Flat_Rate
+	print(CUST.TERMT.flatRate)
+	CUST.TERMT.catClass = BANCS.OUTPARAM.v_Cat_Classif
+	print(CUST.TERMT.catClass)
+	CUST.TERMT.percent = BANCS.OUTPARAM.v_Percent
+	print(CUST.TERMT.percent)
+	CUST.TERMT.delFlg = BANCS.OUTPARAM.v_DelFlg
+	print(CUST.TERMT.delFlg)
+
+	if (CUST.TERMT.delFlg == "Y") Then
+		sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+		sv_x = urhk_SetOrbOut("Error_1|ERR^" + CUST.TERMT.ERR000022 + "^termId")
+		GOTO END_OF_SCRIPT
+	endif
+   sv_u = urhk_SetOrbOut("SuccessOrFailure|Y")
+   GOTO POS_DISP
+endif
+##########################################################################################
+#				POS PROCESS :function M					 #	
+##########################################################################################
+if ((CUST.TERMT.terminal == "POS") and (CUST.TERMT.funcCode == "M")) then
+	BANCS.INPARAM.BINDVARS = CUST.TERMT.termId +"|"+ BANCS.STDIN.contextBankId
+	sv_m = "v_Term_Id, v_Till_Acct_No, v_Fee_Act_No1, v_Fee_Act_No2, v_Amt_Upp_Band, v_Flat_Rate, v_Cat_Classif, v_Percent, v_DelFlg|SELECT Term_Id, Till_Acct_No,"
+	sv_m = sv_m + " Fee_Act_No1, Fee_Act_No2, Amt_Upp_Band, Flat_Rate, Cat_Classif, Percent, Del_Flg FROM Tbaadm.Pos_Terminal_Id"
+	sv_m = sv_m + " WHERE Term_Id = ?SVAR and bank_id=?SVAR"
+	sv_m = sv_m + " And Rownum < 2"
+	print(sv_m)
+	sv_p = urhk_dbSelectWithBind(sv_m)
+	print(sv_p)
+	if (sv_p != 0) Then
+		sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+		sv_x = urhk_SetOrbOut("Error_1|ERR^" + CUST.TERMT.ERR000017 + "^termId")
+		GOTO END_OF_SCRIPT
+	endif
+	CUST.TERMT.tillacctNum = BANCS.OUTPARAM.v_Till_Acct_No
+	print(CUST.TERMT.tillacctNum)
+	CUST.TERMT.feeacctNum1 = BANCS.OUTPARAM.v_Fee_Act_No1
+	print(CUST.TERMT.feeacctNum1)
+	CUST.TERMT.feeacctNum2 = BANCS.OUTPARAM.v_Fee_Act_No2
+	print(CUST.TERMT.feeacctNum2)
+	CUST.TERMT.amtuBand = BANCS.OUTPARAM.v_Amt_Upp_Band
+	print(CUST.TERMT.amtuBand)
+	CUST.TERMT.flatRate = BANCS.OUTPARAM.v_Flat_Rate
+	print(CUST.TERMT.flatRate)
+	CUST.TERMT.catClass = BANCS.OUTPARAM.v_Cat_Classif
+	print(CUST.TERMT.catClass)
+	CUST.TERMT.percent = BANCS.OUTPARAM.v_Percent
+	print(CUST.TERMT.percent)
+	CUST.TERMT.delFlg = BANCS.OUTPARAM.v_DelFlg
+	print(CUST.TERMT.delFlg)
+
+	if (CUST.TERMT.delFlg == "Y") Then
+		sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+		sv_x = urhk_SetOrbOut("Error_1|ERR^" + CUST.TERMT.ERR000022 + "^termId")
+		GOTO END_OF_SCRIPT
+	endif
+	sv_u = urhk_SetOrbOut("SuccessOrFailure|Y")
+	GOTO POS_DISP		
+endif
+##########################################################################################
+#				POS PROCESS :function D					 #	
+##########################################################################################
+if ((CUST.TERMT.terminal == "POS") and (CUST.TERMT.funcCode == "D")) then
+	BANCS.INPARAM.BINDVARS = CUST.TERMT.termId +"|"+ BANCS.STDIN.contextBankId
+	sv_m = "v_Term_Id, v_Till_Acct_No, v_Fee_Act_No1 , v_Fee_Act_No2, v_Amt_Upp_Band, v_Flat_Rate, v_Cat_Classif, v_Percent, v_DelFlg|SELECT Term_Id, Till_Acct_No,"
+	sv_m = sv_m + " Fee_Act_No1, Fee_Act_No2, Amt_Upp_Band, Flat_Rate, Cat_Classif, Percent, Del_Flg FROM Tbaadm.Pos_Terminal_Id "
+	sv_m = sv_m + " WHERE Term_Id = ?SVAR and bank_id=?SVAR"
+	sv_m = sv_m + " And Rownum < 2"
+	print(sv_m)
+	sv_p = urhk_dbSelectWithBind(sv_m)
+	print(sv_p)
+	if (sv_p != 0) Then
+		sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+		sv_x = urhk_SetOrbOut("Error_1|ERR^" + CUST.TERMT.ERR000017 + "^termId")
+		GOTO END_OF_SCRIPT
+	endif
+	CUST.TERMT.tillacctNum = BANCS.OUTPARAM.v_Till_Acct_No
+	print(CUST.TERMT.tillacctNum)
+	CUST.TERMT.feeacctNum1 = BANCS.OUTPARAM.v_Fee_Act_No1
+	print(CUST.TERMT.feeacctNum1)
+	CUST.TERMT.feeacctNum2 = BANCS.OUTPARAM.v_Fee_Act_No2
+	print(CUST.TERMT.feeacctNum2)
+	CUST.TERMT.amtuBand = BANCS.OUTPARAM.v_Amt_Upp_Band
+	print(CUST.TERMT.amtuBand)
+	CUST.TERMT.flatRate = BANCS.OUTPARAM.v_Flat_Rate
+	print(CUST.TERMT.flatRate)
+	CUST.TERMT.catClass = BANCS.OUTPARAM.v_Cat_Classif
+	print(CUST.TERMT.catClass)
+	CUST.TERMT.percent = BANCS.OUTPARAM.v_Percent
+	print(CUST.TERMT.percent)
+	CUST.TERMT.delFlg = BANCS.OUTPARAM.v_DelFlg
+	print(CUST.TERMT.delFlg)
+	if (CUST.TERMT.delFlg == "Y") Then
+		sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+		sv_x = urhk_SetOrbOut("Error_1|ERR^" + CUST.TERMT.ERR000022 + "^termId")
+		GOTO END_OF_SCRIPT
+	endif
+    sv_u = urhk_SetOrbOut("SuccessOrFailure|Y")
+    GOTO POS_DISP	
+endif
+##########################################################################################
+#			Displaying records for POS process				 #
+##########################################################################################
+POS_DISP:
+IF ((CUST.TERMT.terminal == "POS") and ((CUST.TERMT.funcCode == "I") or (CUST.TERMT.funcCode == "D") or (CUST.TERMT.funcCode == "M"))) then
+	BANCS.INPARAM.BINDVARS = CUST.TERMT.termId +"|"+ BANCS.STDIN.contextBankId
+	sv_m = "v_Till_Acct_No, v_Fee_Act_No1, v_Fee_Act_No2, v_Amt_Upp_Band, v_Flat_Rate, v_Cat_Classif, v_Percent, v_DelFlg|SELECT "
+	sv_m = sv_m + " Till_Acct_No, Fee_Act_No1, Fee_Act_No2, Amt_Upp_Band, Flat_Rate, Cat_Classif, Percent, Del_Flg FROM Tbaadm.Pos_Terminal_Id"
+	sv_m = sv_m + " WHERE Term_Id = ?SVAR and bank_id=?SVAR"
+	sv_m = sv_m + " And Rownum < 2"
+	print(sv_m)
+	sv_p = urhk_dbSelectWithBind(sv_m)
+	print(sv_p)
+ENDIF
+if (sv_p == 0) then
+	if (BANCS.OUTPARAM.v_Till_Acct_No != "")then
+		CUST.TERMT.tillacctNum = BANCS.OUTPARAM.v_Till_Acct_No
+		print(CUST.TERMT.tillacctNum)
+	else
+	       CUST.TERMT.tillacctNum = " "
+	endif
+	if (BANCS.OUTPARAM.v_Fee_Act_No1 != "")then
+		CUST.TERMT.feeacctNum1 = BANCS.OUTPARAM.v_Fee_Act_No1
+		print(CUST.TERMT.feeacctNum1)
+	else
+		CUST.TERMT.feeacctNum1 = " "
+	endif
+	if (BANCS.OUTPARAM.v_Fee_Act_No2 != "")then
+		CUST.TERMT.feeacctNum2 = BANCS.OUTPARAM.v_Fee_Act_No2
+		print(CUST.TERMT.feeacctNum2)
+	else
+		CUST.TERMT.feeacctNum2 = " "
+	endif
+	if (BANCS.OUTPARAM.v_Amt_Upp_Band != "")then
+		CUST.TERMT.amtuBand = BANCS.OUTPARAM.v_Amt_Upp_Band
+		print(CUST.TERMT.amtuBand)
+	else
+		CUST.TERMT.amtuBand = " "
+	endif
+
+	if (BANCS.OUTPARAM.v_Flat_Rate != "")then
+		CUST.TERMT.flatRate = BANCS.OUTPARAM.v_Flat_Rate
+		print(CUST.TERMT.flatRate)
+	else
+		CUST.TERMT.flatRate = " "
+	endif
+	if (BANCS.OUTPARAM.v_Cat_Classif != "")then
+		CUST.TERMT.catClass = BANCS.OUTPARAM.v_Cat_Classif
+		print(CUST.TERMT.catClass)
+	else
+		CUST.TERMT.catClass = " "
+	endif
+	if (BANCS.OUTPARAM.v_Percent != "")then
+		CUST.TERMT.percent = BANCS.OUTPARAM.v_Percent
+		print(CUST.TERMT.percent)
+	else
+		CUST.TERMT.percent = " "
+	endif
+else
+	sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+	sv_o = urhk_SetOrbOut("Error_1|ERR^" + CUST.TERMT.ERR000001 + "^termId")
+	GOTO END_OF_SCRIPT
+endif
+#########################################################################################
+#		Displaying records for the criteria page				#
+#########################################################################################	
+	sv_a = urhk_setOrbOut("funcCode|" + CUST.TERMT.funcCode)
+	sv_a = urhk_setOrbOut("terminal|" + CUST.TERMT.terminal)
+	sv_a = urhk_setOrbOut("termId|" + CUST.TERMT.termId)
+	sv_a = urhk_setOrbOut("tillacctNum|" + CUST.TERMT.tillacctNum)
+	sv_a = urhk_setOrbOut("feeacctNum1|" + CUST.TERMT.feeacctNum1)
+	sv_a = urhk_setOrbOut("feeacctNum2|" + CUST.TERMT.feeacctNum2)
+	sv_a = urhk_setOrbOut("amtuBand|" + CUST.TERMT.amtuBand)
+	sv_a = urhk_setOrbOut("flatRate|" + CUST.TERMT.flatRate)
+	sv_a = urhk_setOrbOut("catClass|" + CUST.TERMT.catClass)
+	sv_a = urhk_setOrbOut("percent|" + CUST.TERMT.percent)
+#########################################################################################
+
+END_OF_SCRIPT:
+DELETECLASS("CUST","TERMT")
+
+ExitScript
+trace Off
+end--> 

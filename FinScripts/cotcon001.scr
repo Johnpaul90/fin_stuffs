@@ -1,0 +1,611 @@
+<--START
+TRACE ON
+#=================================================================
+# Source Name:-   COTCON001.scr
+# Date:-          26-June-2016
+# Description:-   COT Concession Setup Amount For Accounts
+# Author :-       Alpha - Plus Technologies (Louis C.)
+# Bank :-         FBN GAMBIA
+#=================================================================
+
+
+#---------------------------------------------------
+# Create the necessary repositories and classes
+#---------------------------------------------------
+
+IF (REPEXISTS("COT") == 0 ) THEN
+#{
+CREATEREP("COT")
+#}
+ENDIF
+IF (CLASSEXISTS("COT","DIS") == 0) THEN
+#{
+CREATECLASS("COT","DIS",5)
+#}
+ENDIF
+
+IF (FIELDEXISTS(BANCS.INPUT.acctNum) == 1) THEN
+
+COT.DIS.funcCode=BANCS.INPUT.funcCode
+COT.DIS.acctNum=BANCS.INPUT.acctNum
+COT.DIS.tamt=BANCS.INPUT.tamt
+
+COT.DIS.boddate=mid$(BANCS.STDIN.BODDate,0,10)
+COT.DIS.dd=mid$(BANCS.STDIN.BODDate,0,2)
+COT.DIS.mm=mid$(BANCS.STDIN.BODDate,3,2)
+COT.DIS.yy=mid$(BANCS.STDIN.BODDate,6,4)
+print(COT.DIS.boddate)
+print(COT.DIS.dd)
+print(COT.DIS.mm)
+print(COT.DIS.yy)
+print(BANCS.STDIN.mySolId)
+
+#Format Date
+if (COT.DIS.mm == "01") then
+COT.DIS.mm="JAN"
+endif 
+if (COT.DIS.mm == "02") then
+COT.DIS.mm="FEB"
+endif 
+if (COT.DIS.mm == "03") then
+COT.DIS.mm="MAR"
+endif 
+if (COT.DIS.mm == "04") then
+COT.DIS.mm="APR"
+endif 
+if (COT.DIS.mm == "05") then
+COT.DIS.mm="MAY"
+endif 
+if (COT.DIS.mm == "06") then
+COT.DIS.mm="JUN"
+endif 
+if (COT.DIS.mm == "07") then
+COT.DIS.mm="JUL"
+endif 
+if (COT.DIS.mm == "08") then
+COT.DIS.mm="AUG"
+endif 
+if (COT.DIS.mm == "09") then
+COT.DIS.mm="SEP"
+endif 
+if (COT.DIS.mm == "10") then
+COT.DIS.mm="OCT"
+endif 
+if (COT.DIS.mm == "11") then
+COT.DIS.mm="NOV"
+endif 
+if (COT.DIS.mm == "12") then
+COT.DIS.mm="DEC"
+endif 
+
+COT.DIS.boddate=COT.DIS.dd+"-"+COT.DIS.mm+"-"+COT.DIS.yy
+print(COT.DIS.boddate)
+print(COT.DIS.funcCode)
+print(COT.DIS.acctNum)
+print(COT.DIS.tamt)
+
+ENDIF
+IF(COT.DIS.funcCode == "") THEN
+
+sv_z = urhk_SetOrbOut("SuccessOrFailure|N")
+print(sv_z)
+sv_z = urhk_SetOrbErr("Function Code Cannot Be Empty")
+print(sv_z)
+Goto Finish
+ENDIF
+
+IF(COT.DIS.funcCode != "A") THEN
+Goto UserInq
+ENDIF
+#---------------------------------
+#Validating input Account Number
+#---------------------------------
+
+sv_r = urhk_getAcctDetailsInRepository(COT.DIS.acctNum)
+print(sv_r)
+if (sv_r != 0) then
+sv_z = urhk_SetOrbOut("SuccessOrFailure|N")
+print(sv_z)
+sv_z = urhk_SetOrbErr("Invalid Account Number")
+print(sv_z)
+Goto Finish
+
+endif
+
+#Verify for valid account scheme
+
+sv_a="schmAcct|Select schm_type from tbaadm.GAM "
+sv_a=sv_a + " where foracid ='"+COT.DIS.acctNum+"'"
+print(sv_a)
+sv_b = urhk_dbSelect(sv_a)
+If (sv_b !=0) then
+sv_z = urhk_SetOrbOut("SuccessOrFailure|N")
+print(sv_z)
+sv_z = urhk_SetOrbErr("Error Retreiving Record from Database")
+print(sv_z)
+Goto Finish
+endif
+if (BANCS.OUTPARAM.schmAcct != "ODA") then
+sv_z = urhk_SetOrbOut("SuccessOrFailure|N")
+print(sv_z)
+sv_z = urhk_SetOrbErr("Not A Valid COT Eligible Account")
+print(sv_z)
+Goto Finish
+endif
+
+#Verify for account closure and frozen
+
+sv_a="cntAcd|Select count(acid) from tbaadm.gam "
+sv_a=sv_a + " where foracid ='"+COT.DIS.acctNum+"' And schm_type='ODA' "
+sv_a=sv_a + " And del_flg ='N' And acct_cls_flg='N' And acct_crncy_code='GMD' "
+sv_a=sv_a + " And frez_code not in ('D','T') "
+print(sv_a)
+sv_b = urhk_dbSelect(sv_a)
+If (sv_b !=0) then
+sv_z = urhk_SetOrbOut("SuccessOrFailure|N")
+print(sv_z)
+sv_z = urhk_SetOrbErr("Error Retreiving Record from Database")
+print(sv_z)
+Goto Finish
+endif
+COT.DIS.cntAcd = BANCS.OUTPARAM.cntAcd 
+print(COT.DIS.cntAcd)
+
+IF (COT.DIS.cntAcd == "0") THEN 
+
+sv_z = urhk_SetOrbOut("SuccessOrFailure|N")
+print(sv_z)
+sv_z = urhk_SetOrbErr("Account Is Either Closed Or Frozen")
+print(sv_z)
+Goto Finish
+ENDIF
+
+#Verify for dormancy and frozen
+
+sv_a="cntSt|Select count(acid) from tbaadm.cam "
+sv_a=sv_a + " where acct_status ='A' "
+sv_a=sv_a + " And acid in (select acid from tbaadm.gam where foracid ='"+COT.DIS.acctNum+"' And acct_ownership != 'O'"
+	sv_a=sv_a + " And acct_crncy_code='GMD') "
+ print(sv_a)
+ sv_b = urhk_dbSelect(sv_a)
+ If (sv_b !=0) then
+ sv_z = urhk_SetOrbOut("SuccessOrFailure|N")
+ print(sv_z)
+ sv_z = urhk_SetOrbErr("Error Retreiving Record from Database")
+ print(sv_z)
+ Goto Finish
+ endif
+ COT.DIS.cntSt = BANCS.OUTPARAM.cntSt 
+ print(COT.DIS.cntSt)
+ sv_a="cntSta|Select count(acid) from tbaadm.smt "
+ sv_a=sv_a + " where acct_status ='A' "
+ sv_a=sv_a + " And acid in (select acid from tbaadm.gam where foracid ='"+COT.DIS.acctNum+"' And acct_ownership != 'O' "
+ 	sv_a=sv_a + " And acct_crncy_code='GMD') "
+ print(sv_a)
+ sv_b = urhk_dbSelect(sv_a)
+ If (sv_b !=0) then
+ sv_z = urhk_SetOrbOut("SuccessOrFailure|N")
+ print(sv_z)
+ sv_z = urhk_SetOrbErr("Error Retreiving Record from Database")
+ print(sv_z)
+ Goto Finish
+ endif
+ COT.DIS.cntSta = BANCS.OUTPARAM.cntSta 
+ print(COT.DIS.cntSta)
+
+ IF ((COT.DIS.cntSta == "0") AND (COT.DIS.cntSt== "0")) THEN 
+
+ sv_z = urhk_SetOrbOut("SuccessOrFailure|N")
+ print(sv_z)
+ sv_z = urhk_SetOrbErr("Account is Dormant")
+ print(sv_z)
+ Goto Finish
+ ENDIF
+ 
+
+#Verify if record exist And Pending Verification
+
+ sv_a = "count|select count(1) from custom.CONCE_TBL where acct_num='" + COT.DIS.acctNum + "'"
+ sv_a = sv_a + " And del_flg <> 'Y' and bank_id ='"+ BANCS.STDIN.contextBankId + "'"
+ #sv_a = sv_a + " And ENT_CRE_FLG <> 'Y' " 
+
+ sv_b = urhk_dbSelect(sv_a)
+ print(sv_b)
+ If (sv_b !=0) then
+ sv_z = urhk_SetOrbOut("SuccessOrFailure|N")
+ print(sv_z)
+ sv_z = urhk_SetOrbErr("Error Verifying IF Concession Exists")
+ print(sv_z)
+ Goto Finish
+ endif
+
+ IF (BANCS.OUTPARAM.count != "0") THEN 
+ #{
+ sv_z = urhk_SetOrbOut("SuccessOrFailure|N")
+ print(sv_z)
+ sv_z = urhk_SetOrbErr("Concession Already Exist On Account;Verification Pending")
+ print(sv_z)
+ Goto Finish
+ #}
+ ENDIF
+
+#Create Rec Seq
+ sv_z = "reqnum|select LPAD(CUSTOM.COTSEQ.NEXTVAL +1,9,'0') from DUAL"
+ PRINT(sv_z)
+ sv_v = urhk_dbSelectWithBind(sv_z)
+ sv_w = BANCS.OUTPARAM.reqnum
+ PRINT(sv_w)
+
+# Persist Record  
+ #sv_c = cdouble(COT.DIS.tamt)
+ sv_s = "INSERT into custom.CONCE_TBL values('"+sv_w+"','"+BANCS.STDIN.mySolId+"','"+COT.DIS.acctNum+"','"+COT.DIS.tamt+"','"+COT.DIS.boddate+"','" 
+ sv_s = sv_s +BANCS.STDIN.userId+"','N','N','"+BANCS.STDIN.contextBankId+"',null,null,to_date(sysdate,'dd-mm-yyyy'))" 
+ print(sv_s)
+ sv_r = urhk_dbSQL(sv_s)
+ print(sv_r)
+ IF(sv_r != "0")THEN
+ #{
+ sv_z = urhk_SetOrbOut("SuccessOrFailure|N")
+ print(sv_z)
+ sv_z = urhk_SetOrbErr("Unable To Setup COT Concession For Account")
+ print(sv_z)
+ Goto Finish
+ #}
+ ENDIF
+ sv_r = urhk_dbSQL("commit")
+ print(sv_r)
+ COT.DIS.msg="COT Account("+COT.DIS.acctNum+") Concession Successfully Setup"
+ Goto Result
+
+UserInq:
+	#=====================
+	#Modify Limit Amount 
+	#=====================
+	if (COT.DIS.funcCode != "M") then
+	Goto UserChk
+     endif
+
+#Only Same user can modify Unverified records
+
+     sv_a = "usr,ent|select USER_ID,ent_cre_flg from custom.CONCE_TBL where acct_num='" + COT.DIS.acctNum + "'"
+     sv_a = sv_a + " And del_flg <> 'Y' and bank_id ='"+ BANCS.STDIN.contextBankId + "'"
+     sv_a = sv_a + " And ENT_CRE_FLG ='N' "
+     sv_b = urhk_dbSelect(sv_a)
+     print(sv_b)
+     If (sv_b !=0) then
+     sv_z = urhk_SetOrbOut("SuccessOrFailure|N")
+     print(sv_z)
+     sv_z = urhk_SetOrbErr("Error Retrieving Unverified Concession Record For Account")
+     print(sv_z)
+     Goto Finish
+     endif
+     COT.DIS.usr = BANCS.OUTPARAM.usr
+     COT.DIS.ent = BANCS.OUTPARAM.ent
+
+     if(BANCS.STDIN.userId != COT.DIS.usr) then
+     if (COT.DIS.ent == "N") then
+     sv_z = urhk_SetOrbOut("SuccessOrFailure|N")
+     print(sv_z)
+     sv_z = urhk_SetOrbErr("Only the same user can modify a record")
+     print(sv_z)
+     Goto Finish
+     endif
+     endif
+
+#Only Same user can modify Unverified records
+
+    sv_s = "UPDATE custom.CONCE_TBL SET tran_amt="+COT.DIS.tamt+",ENT_CRE_FLG='N' where del_flg ='N' " 
+    sv_s = sv_s + " And bank_id='"+BANCS.STDIN.contextBankId+"' And acct_num='"+COT.DIS.acctNum+"'"
+    sv_s = sv_s + " And tran_date =to_date('"+COT.DIS.boddate+"','dd-mm-yyyy') "
+    print(sv_s)
+    sv_r = urhk_dbSQL(sv_s)
+    print(sv_r)
+    IF(sv_r != "0")THEN
+    #{
+    sv_z = urhk_SetOrbOut("SuccessOrFailure|N")
+    print(sv_z)
+    sv_z = urhk_SetOrbErr("Unable To Modify Limit Amount For Account")
+    print(sv_z)
+    Goto Finish
+    #}
+    ENDIF
+    sv_r = urhk_dbSQL("commit")
+    print(sv_r)
+    COT.DIS.msg="COT Account("+COT.DIS.acctNum+") Concession Successfully Modified"
+    Goto Result
+
+UserChk:
+	
+	If (COT.DIS.funcCode == "D") then
+      Goto UserDel
+  Endif
+#Check For Same User Verifier
+  sv_a = "usr|select USER_ID from custom.CONCE_TBL where acct_num='"+COT.DIS.acctNum + "'"
+  sv_a = sv_a + " And ENT_CRE_FLG='N' "
+  sv_a = sv_a + " And bank_id ='"+ BANCS.STDIN.contextBankId + "'"
+  #sv_a = sv_a + " And del_flg <> 'Y' and bank_id ='"+ BANCS.STDIN.contextBankId + "'"
+
+  sv_b = urhk_dbSelect(sv_a)
+  print(sv_b)
+  If (sv_b !=0) then
+  sv_z = urhk_SetOrbOut("SuccessOrFailure|N")
+  print(sv_z)
+  sv_z = urhk_SetOrbErr("Error Retrieving Account Concession Record For Verification")
+  print(sv_z)
+  Goto Finish
+  endif
+  COT.DIS.usr = BANCS.OUTPARAM.usr
+
+ If(BANCS.STDIN.userId == COT.DIS.usr) then
+ sv_z = urhk_SetOrbOut("SuccessOrFailure|N")
+ print(sv_z)
+ sv_z = urhk_SetOrbErr("Same User cannot Verify COT Account Concession Record")
+ print(sv_z)
+ Goto Finish
+ Else
+#Check if user is in same sol with account 
+ sv_a = "acctsl|select p.sol_id from tbaadm.upr p,custom.CONCE_TBL l "
+ sv_a = sv_a + " where l.user_id= p.user_id "
+ sv_a = sv_a + " And p.del_flg <> 'Y' "
+ sv_a = sv_a + " And l.del_flg <> 'Y' "
+ sv_a = sv_a + " And l.ENT_CRE_FLG <> 'Y' and l.acct_num ='"+ COT.DIS.acctNum + "'"
+ print(sv_a)
+ sv_b = urhk_dbSelect(sv_a)
+ print(sv_b)
+ If (sv_b !=0) then
+ sv_z = urhk_SetOrbOut("SuccessOrFailure|N")
+ print(sv_z)
+ sv_z = urhk_SetOrbErr("Account SolId Not Retrieved")
+ print(sv_z)
+ Goto Finish
+ endif
+ print(BANCS.OUTPARAM.acctsl)
+ print(BANCS.STDIN.mySolId)
+ if (BANCS.OUTPARAM.acctsl != BANCS.STDIN.mySolId) then
+ sv_z = urhk_SetOrbOut("SuccessOrFailure|N")
+ print(sv_z)
+ sv_z = urhk_SetOrbErr("User From Another Sol Cannot Verify Account")
+ print(sv_z)
+ Goto Finish
+ endif
+ 
+
+#verify
+#Ensure workclass is 390 and above
+
+ #sv_s = "uwrkclass|Select USER_WORK_CLASS from tbaadm.upr where user_id='" + BANCS.STDIN.userId + "'"
+ #print(sv_s)
+ #sv_d = urhk_dbSelect(sv_s)
+ #if (sv_d != 0) then
+ #COT.DIS.uwrkclass="0"
+ #sv_z = urhk_SetOrbOut("SuccessOrFailure|N")
+ #print(sv_z)
+ #sv_z = urhk_SetOrbErr("Unable To Retrieve Verifier Work Class")
+ #print(sv_z)
+ #Goto Finish
+ #else
+ #COT.DIS.uwrkclass=BANCS.OUTPARAM.uwrkclass
+ #print(COT.DIS.uwrkclass)
+ #endif
+ #if (cint(COT.DIS.uwrkclass) < 390) then
+ #sv_z = urhk_SetOrbOut("SuccessOrFailure|N")
+ #print(sv_z)
+ #sv_z = urhk_SetOrbErr("User Is Ineligible To Authorize This Transaction")
+ #print(sv_z)
+ #Goto Finish
+ #endif
+#----------------------------------------		   
+#Store the old Verified value in History
+#----------------------------------------
+ sv_s = "seqnum,vsol,acctno,vamt,vdate,vuser,vent|Select seqnum,sol_id,acct_num,tran_amt,tran_date,user_id,ent_cre_flg "
+ sv_s = sv_s + " from custom.CONCE_TBL where del_flg ='N' And ENT_CRE_FLG='N' " 
+ sv_s = sv_s + " And bank_id='"+BANCS.STDIN.contextBankId+"' And acct_num='"+COT.DIS.acctNum+"'"
+ print(sv_s)
+ sv_r = urhk_dbSelect(sv_s)
+ print(sv_r)
+ IF(sv_r != "0")THEN
+ #{
+ sv_z = urhk_SetOrbOut("SuccessOrFailure|N")
+ print(sv_z)
+ sv_z = urhk_SetOrbErr("Unable To Retrieve COT Concession Record For Account")
+ print(sv_z)
+ Goto Finish
+ #}
+ ENDIF
+ COT.DIS.seqnum = BANCS.OUTPARAM.seqnum
+ COT.DIS.vsol = BANCS.OUTPARAM.vsol
+ COT.DIS.acctNum = BANCS.OUTPARAM.acctno
+ COT.DIS.vamt = BANCS.OUTPARAM.vamt
+ COT.DIS.tdate = BANCS.OUTPARAM.vdate
+ COT.DIS.tuser = BANCS.OUTPARAM.vuser
+ COT.DIS.tent = BANCS.OUTPARAM.vent
+
+ sv_s = "INSERT into custom.CONCE_TBL_HIST values('"+COT.DIS.seqnum+"','"+COT.DIS.vsol+"','"+COT.DIS.acctNum+"'"
+ 	sv_s = sv_s + ",'"+COT.DIS.vamt+"','"+COT.DIS.tdate+"','"+COT.DIS.tuser+"','"+COT.DIS.tent+"','N','"+BANCS.STDIN.contextBankId+"'"
+    sv_s = sv_s + ",null,null,to_date(sysdate,'dd-mm-yyyy'))" 
+    print(sv_s)
+    sv_r = urhk_dbSQL(sv_s)
+    print(sv_r)
+    IF(sv_r != "0")THEN
+    #{
+    sv_z = urhk_SetOrbOut("SuccessOrFailure|N")
+    print(sv_z)
+    sv_z = urhk_SetOrbErr("Unable To Move COT Concession Record For Account To History")
+    print(sv_z)
+    Goto Finish
+    #}
+    ENDIF
+    sv_r = urhk_dbSQL("commit")
+    print(sv_r)
+#----------------------------	   
+#Remove Record From Main TBL
+#----------------------------	
+    #sv_s = "DELETE from custom.CONCE_TBL Where SEQNUM='"+COT.DIS.seqnum+"' And SOL_ID='"+COT.DIS.vsol+"'" 
+    #sv_s = sv_s + " And ACCT_NUM='"+COT.DIS.acctNum+"' And USER_ID='"+COT.DIS.tuser+"'"
+    #sv_s = sv_s + " And BANK_ID='"+BANCS.STDIN.contextBankId+"'" 
+    #print(sv_s)
+    #sv_r = urhk_dbSQL(sv_s)
+    #print(sv_r)
+    #IF(sv_r != "0")THEN
+    ##{
+    #sv_z = urhk_SetOrbOut("SuccessOrFailure|N")
+    #print(sv_z)
+    #sv_z = urhk_SetOrbErr("Unable To Complete COT Concession Movement To History")
+    #print(sv_z)
+    #Goto Finish
+    #}
+    #ENDIF
+    #sv_r = urhk_dbSQL("commit")
+    #print(sv_r)
+#--------------------	   
+#Now Verify Record
+#--------------------
+    sv_s = "UPDATE custom.CONCE_TBL SET ENT_CRE_FLG = 'Y',vuser='"+BANCS.STDIN.userId+"',"
+    sv_s = sv_s + "vdate=to_date('"+COT.DIS.boddate+"','dd-mm-yyyy'),"
+    sv_s = sv_s + "rcre_time=to_date('"+COT.DIS.boddate+"','dd-mm-yyyy') where del_flg ='N' " 
+    sv_s = sv_s + " And bank_id='"+BANCS.STDIN.contextBankId+"' And acct_num='"+COT.DIS.acctNum+"'"
+    sv_s = sv_s + " And ENT_CRE_FLG = 'N' "
+    print(sv_s)
+    sv_r = urhk_dbSQL(sv_s)
+    print(sv_r)
+    IF(sv_r != "0")THEN
+    sv_z = urhk_SetOrbOut("SuccessOrFailure|N")
+    print(sv_z)
+    sv_z = urhk_SetOrbErr("Unable To Verify COT Account Concession")
+    print(sv_z)
+    Goto Finish
+    ENDIF
+    sv_r = urhk_dbSQL("commit")
+    print(sv_r)
+    COT.DIS.msg="COT Account Concession Verified Successfully"
+    
+    Goto Result
+  endif
+  
+UserDel:  
+	#Delete Record
+	if (COT.DIS.funcCode == "D") then
+
+#Check if user is in same sol with account 
+        sv_a = "acctsl|select p.sol_id from tbaadm.upr p,custom.CONCE_TBL l "
+        sv_a = sv_a + " where l.user_id= p.user_id "
+        sv_a = sv_a + " And p.del_flg <> 'Y' "
+        sv_a = sv_a + " And l.del_flg <> 'Y' "
+        sv_a = sv_a + " And l.seqnum in (Select max(seqnum) from custom.CONCE_TBL where acct_num='" + COT.DIS.acctNum + "')"
+        print(sv_a)
+        sv_b = urhk_dbSelect(sv_a)
+        print(sv_b)
+        If (sv_b !=0) then
+        sv_z = urhk_SetOrbOut("SuccessOrFailure|N")
+        print(sv_z)
+        sv_z = urhk_SetOrbErr("Account SolId Not Retrieved")
+        print(sv_z)
+        Goto Finish
+        endif
+        if (BANCS.OUTPARAM.acctsl != BANCS.STDIN.mySolId) then
+        sv_z = urhk_SetOrbOut("SuccessOrFailure|N")
+        print(sv_z)
+        sv_z = urhk_SetOrbErr("User From Another Sol Cannot Delete Account Concession")
+        print(sv_z)
+        Goto Finish
+        endif
+        
+
+#Check For Same User Before Delete
+
+        sv_a = "usr,entFlg|select USER_ID,ENT_CRE_FLG from custom.CONCE_TBL "
+        sv_a = sv_a + " Where del_flg <> 'Y' and bank_id ='"+ BANCS.STDIN.contextBankId + "'"
+        sv_a = sv_a + " And seqnum in (Select max(seqnum) from custom.CONCE_TBL where acct_num='" + COT.DIS.acctNum + "')"
+
+        sv_b = urhk_dbSelect(sv_a)
+        print(sv_b)
+        If (sv_b !=0) then
+        sv_z = urhk_SetOrbOut("SuccessOrFailure|N")
+        print(sv_z)
+        sv_z = urhk_SetOrbErr("Error Retrieving User For Account Concession Record Before Deletion")
+        print(sv_z)
+        Goto Finish
+        endif
+        COT.DIS.usr = BANCS.OUTPARAM.usr
+        COT.DIS.entFlg = BANCS.OUTPARAM.entFlg
+
+        #if(BANCS.STDIN.userId != COT.DIS.usr) then
+        #sv_z = urhk_SetOrbOut("SuccessOrFailure|N")
+        #print(sv_z)
+        #sv_z = urhk_SetOrbErr("You Cannot Delete Record Entered By Another User")
+        #print(sv_z)
+        #Goto Finish
+        #else
+        #if (COT.DIS.entFlg != "Y") then
+        #Goto Phys 
+        #else
+        #Goto logic 
+        #endif
+        #endif
+#===Used to behave like CANCEL OPTION
+        if (COT.DIS.entFlg != "Y") then
+        if(BANCS.STDIN.userId != COT.DIS.usr) then
+        sv_z = urhk_SetOrbOut("SuccessOrFailure|N")
+        print(sv_z)
+        sv_z = urhk_SetOrbErr("You Cannot Delete Record Entered By Another User")
+        print(sv_z)
+        Goto Finish
+else
+Goto Phys 
+endif
+else
+Goto logic 
+endif
+
+#Delete
+
+Phys:
+	sv_a = "Delete From custom.CONCE_TBL where acct_num='" + COT.DIS.acctNum + "'"
+        sv_a = sv_a + " And seqnum in (Select max(seqnum) from custom.CONCE_TBL where acct_num='" + COT.DIS.acctNum + "')"
+        sv_a = sv_a + " And del_flg <> 'Y' and bank_id ='"+ BANCS.STDIN.contextBankId + "' And ENT_CRE_FLG='N' "
+        print(sv_a)
+        sv_b = urhk_dbSQL(sv_a)
+        print(sv_b)
+        If (sv_b !=0) then
+        sv_z = urhk_SetOrbOut("SuccessOrFailure|N")
+        print(sv_z)
+        sv_z = urhk_SetOrbErr("No Un-Modified Concession Record For Account Exist")
+        print(sv_z)
+        Goto Finish
+        endif
+        COT.DIS.msg="Account Concession Deleted Successfully For :" + COT.DIS.acctNum
+        Goto Result
+
+logic:
+	sv_a = "UPDATE custom.CONCE_TBL SET del_flg='Y',ENT_CRE_FLG='N' where acct_num='" + COT.DIS.acctNum + "'"
+        sv_a = sv_a + " And seqnum in (Select max(seqnum) from custom.CONCE_TBL where acct_num='" + COT.DIS.acctNum + "')"
+        sv_a = sv_a + " And del_flg <> 'Y' and bank_id ='"+ BANCS.STDIN.contextBankId + "' And ENT_CRE_FLG='Y' "
+        print(sv_a)
+        sv_b = urhk_dbSQL(sv_a)
+        print(sv_b)
+        If (sv_b !=0) then
+        sv_z = urhk_SetOrbOut("SuccessOrFailure|N")
+        print(sv_z)
+        sv_z = urhk_SetOrbErr("No Record For Account Exists.")
+        print(sv_z)
+        Goto Finish
+        endif
+        COT.DIS.msg="Account Concession Deleted Successfully For :" + COT.DIS.acctNum
+        Goto Result
+		endif
+
+Result:
+	sv_i = "SuccessOrFailure|Y"
+	PRINT(sv_i)
+	sv_j = urhk_SetOrbOut(sv_i)
+	sv_i = "RESULT_MSG|" + COT.DIS.msg
+	PRINT(sv_i)
+	sv_j = urhk_SetOrbOut(sv_i)
+	PRINT(sv_j)
+
+
+Finish:
+	
+	TRACE OFF
+EXITSCRIPT
+END-->

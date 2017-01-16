@@ -1,0 +1,96 @@
+<--START
+TRACE ON
+
+#---------------------------------------------------
+# Create the necessary repositories and classes
+#---------------------------------------------------
+IF (REPEXISTS("COT") == 0 ) THEN
+#{
+	CREATEREP("COT")
+#}
+ENDIF
+
+IF (CLASSEXISTS("COT","ACCU") == 0) THEN
+#{
+	CREATECLASS("COT","ACCU",5)
+#}
+ENDIF
+IF (BANCS.STDIN.languageCode == "INFENG") THEN
+#{
+        COT.ACCU.ERR000001 = "ACCU ACCUuild Completed"
+#}
+ENDIF
+
+COT.ACCU.funcCode = BANCS.INPUT.funcCode
+COT.ACCU.jobid = BANCS.INPUT.jobid
+COT.ACCU.jobdate = BANCS.INPUT.jobdate
+COT.ACCU.acctno = BANCS.INPUT.acctno
+COT.ACCU.chk = BANCS.INPUT.chk
+print(COT.ACCU.funcCode)
+print(COT.ACCU.jobid)
+print(COT.ACCU.jobdate)
+print(COT.ACCU.acctno)
+print(COT.ACCU.chk)
+
+#Y --> COTAC; N--> COTCH
+If (COT.ACCU.funcCode == "J") Then
+
+   If (COT.ACCU.jobid == "Y") Then
+      #sv_b = "exebatch babx4061 0 gmbRBCOTaccu.scr " + " " + COT.ACCU.jobdate
+      #print(sv_b)
+	  CALL("gmbRBCOTaccu.scr")
+   endif
+   If (COT.ACCU.jobid == "N") Then
+      sv_b = "exebatch babx4061 0 gmbRBCOTchrg.scr " + " " + COT.ACCU.jobdate 
+      print(sv_b)
+   endif 
+   
+Else
+#No Seperate Accural During Closing Account; Collect Charge Straight Up
+   If (COT.ACCU.jobid == "Y") Then
+      If (COT.ACCU.chk != "Y") Then
+         #sv_b = "exebatch babx4061 0 gmbRBAcctCOTaccu.scr " + " " + COT.ACCU.acctno+ " " +COT.ACCU.chk
+         #print(sv_b)
+	     CALL("gmbRBAcctCOTaccu.scr")
+	  else
+	  	 sv_m = urhk_SetOrbOut("SuccessOrFailure|N")
+	     sv_f = urhk_SetOrbOut("Error_1|ERR^No Seperate Accural During Closing Account;Use COTCH option To Collect Charge^funcCode")
+		 Goto Finish
+	  endif
+   endif
+   If (COT.ACCU.jobid == "N") Then
+      sv_b = "exebatch babx4061 0 gmbRBAcctCOTchrg.scr " + " " + COT.ACCU.acctno+ " " +COT.ACCU.chk
+      print(sv_b)
+   endif 
+   
+EndIf
+   sv_c = System(sv_b)
+   print(sv_c)
+   if (sv_c != 0) then
+      Goto Finish
+   endif
+
+If (COT.ACCU.funcCode == "J") Then
+   sv_s = "Update custom.ACCUFLD_TBL set status_flg='Y' where jobdate='" + COT.ACCU.jobdate + "' and bank_id = '"+BANCS.STDIN.contextBankId+"'"
+   print(sv_s)
+   sv_d =  urhk_dbSQL(sv_s)
+   print(sv_d)
+   IF(sv_d == 0) THEN
+   #{
+     sv_d =  urhk_dbSQL("commit")
+   #}
+   endif
+endif
+
+
+Finish:
+     Sv_u = urhk_SetOrbOut("SuccessOrFailure|Y")
+     Sv_u = urhk_SetOrbOut("RESULT_MSG|" + COT.ACCU.ERR000001)
+     GOTO FINISH
+
+
+EXITSCRIPT
+trace off
+end-->
+~
+

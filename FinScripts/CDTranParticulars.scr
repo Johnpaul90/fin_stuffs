@@ -1,0 +1,553 @@
+#============================================================
+# IMPORTANT: Auto Generated Header. DO NOT CHANGE MANUALLY.
+# Product: Finacle Core
+# Category: User Defined
+# Script: CDTranParticulars.scr
+# Type: NA|default
+# Description: These types of scripts do not belong to any particular category and are standalone scripts with no script specific repositories or fields.
+# Author: LONGBRIDGE
+# Date: 8/20/15 3:14 AM
+# Modification Log:
+#============================================================
+<--START
+	# Script body goes here
+	TRACE ON
+	sv_r = urhk_B2K_printRepos("BANCS")
+	IF (BANCS.INPUT.Command=="ECHR") THEN
+	#{
+		EXITSCRIPT
+	#}
+	ENDIF
+	
+	IF(FIELDEXISTS(BANCS.INPUT.DccId)==0)THEN
+	#{
+		GOTO FAILURE
+	#}
+	ENDIF
+	
+	IF(FIELDEXISTS(BANCS.INPUT.DccId))THEN
+	#{
+		IF(BANCS.INPUT.DccId=="FAB") THEN
+		#{
+			EXITSCRIPT
+		#}
+		ENDIF
+	#}
+	ENDIF
+	
+	########################################################
+	#To obtain solid and fetch new account
+	#if the Debit account sent in is the old one
+	########################################################
+	
+	IF (FIELDEXISTS(BANCS.INPUT.Foracid)) THEN
+	#{
+		sv_c = BANCS.INPUT.Foracid
+		PRINT(sv_c)
+		sv_v = "first|select sol_id from gam where foracid='" + BANCS.INPUT.Foracid + "'"
+		sv_f = urhk_dbSelect(sv_v)
+		IF (sv_f == "0") THEN
+		#{
+			BANCS.OUTPUT.SolId = BANCS.OUTPARAM.first
+			BANCS.INPUT.SolId = BANCS.OUTPUT.SolId
+			PRINT(BANCS.OUTPUT.SolId)
+			#}
+		ELSE
+		#{
+			PRINT("Old Account detected")
+			sv_s = "first,origacc|select sol_id,foracid from tbaadm.gam where foracid=(select "
+			sv_s = sv_s + "finacle_acct_num from custom.fbn_am where old_acct_num = '"
+			sv_s = sv_s + BANCS.INPUT.Foracid + "')"
+			sv_r =  urhk_dbSelectWithBind(sv_s)
+			IF (sv_r == "0")THEN
+			#{
+				PRINT("Got Here Select Successful")
+				BANCS.INPUT.Foracid = BANCS.OUTPARAM.origacc
+				BANCS.OUTPUT.Foracid = BANCS.INPUT.Foracid
+				PRINT(BANCS.INPUT.Foracid)
+				PRINT(BANCS.OUTPUT.Foracid)
+				BANCS.OUTPUT.SolId = BANCS.OUTPARAM.first
+				BANCS.INPUT.SolId = BANCS.OUTPUT.SolId
+				PRINT(BANCS.OUTPUT.SolId)
+			#}
+			ELSE
+				#{
+				BANCS.OUTPUT.RespCode="99"
+				BANCS.OUTPUT.successOrFailure="F"
+				EXITSCRIPT
+			#}
+			ENDIF
+		#}
+		ENDIF
+	#}
+	ENDIF
+	
+	
+	################################
+	#####To fetch for credit account
+	################################
+	
+	IF (FIELDEXISTS(BANCS.INPUT.CrForacid)) THEN
+	#{
+		IF (BANCS.INPUT.CrForacid != "") THEN
+		#{
+			sv_c = BANCS.INPUT.CrForacid
+			PRINT(sv_c)
+			sv_k = "first|select sol_id from gam where foracid='" + BANCS.INPUT.CrForacid + "'"
+			sv_y = urhk_dbSelect(sv_k)
+			IF (sv_y == "0") THEN
+			#{
+				BANCS.OUTPUT.CrSolId = BANCS.OUTPARAM.first
+				PRINT(BANCS.OUTPUT.CrSolId)
+				#}
+			ELSE
+			#{
+				PRINT("Old Account detected")
+				sv_s = "first,origacc|select sol_id,foracid from tbaadm.gam where foracid=(select "
+				sv_s = sv_s + "finacle_acct_num from custom.fbn_am where old_acct_num = '"
+				sv_s = sv_s + BANCS.INPUT.CrForacid + "')"
+				sv_r =  urhk_dbSelectWithBind(sv_s)
+				IF (sv_r == "0")THEN
+				#{
+					PRINT("Got Here Select Successful")
+					BANCS.INPUT.CrForacid = BANCS.OUTPARAM.origacc
+					BANCS.OUTPUT.CrForacid = BANCS.INPUT.CrForacid
+					PRINT(BANCS.INPUT.CrForacid)
+					PRINT(BANCS.OUTPUT.CrForacid)
+					BANCS.OUTPUT.CrSolId = BANCS.OUTPARAM.first
+					BANCS.INPUT.CrSolId = BANCS.OUTPUT.CrSolId
+					PRINT(BANCS.OUTPUT.CrSolId)
+				#}
+				ELSE
+					#{
+					BANCS.OUTPUT.RespCode="99"
+					BANCS.OUTPUT.successOrFailure="F"
+					EXITSCRIPT
+				#}
+				ENDIF
+			#}
+			ENDIF
+		#}
+		ENDIF
+	#}
+	ENDIF
+	
+	PRINT(BANCS.INPUT.StlmntFee)
+	PRINT(BANCS.INPUT.StlmntAmt)
+	PRINT(BANCS.INPUT.PartTranIdentifier)
+	PRINT(BANCS.INPUT.TranAmt)
+	PRINT(BANCS.INPUT.Qualifier)
+	
+	sv_a = BANCS.INPUT.Command
+	sv_b = BANCS.INPUT.PartTranType
+	sv_x = BANCS.INPUT.DeviceId
+	sv_y = BANCS.INPUT.DccId
+	sv_z = BANCS.INPUT.ReservedField1
+	sv_h = MID$(BANCS.INPUT.CardAcceptorName,0,40)
+	sv_e = MID$(BANCS.INPUT.CardAcceptorName,16,6)
+	sv_e = sv_e + LTRIM(MID$(BANCS.INPUT.CardAcceptorName,22,14),' ')
+	sv_o = MID$(BANCS.INPUT.CardAcceptorName,0,40)
+	#sv_x = ltrim(BANCS.INPUT.DeviceId, '0')
+	sv_x = MID$(BANCS.INPUT.DeviceId,0,3)
+	
+	##Location information
+	sv_u = TRIM(MID$(BANCS.INPUT.CardAcceptorName,0,20),' ')
+	PRINT(sv_u)
+	##City
+	sv_l = TRIM(MID$(BANCS.INPUT.CardAcceptorName,20,10),' ')
+	PRINT(sv_l)
+	##State
+	sv_i = TRIM(MID$(BANCS.INPUT.CardAcceptorName,30,2),' ')
+	PRINT(sv_i)
+	###Country
+	sv_j = TRIM(MID$(BANCS.INPUT.CardAcceptorName,38,2),' ')
+	PRINT(sv_j)
+	sv_i = sv_i + "/" + sv_j
+	
+	BANCS.OUTPUT.TranParticulars = ""
+	BANCS.OUTPUT.PartTranIdentifier = ""
+	BANCS.OUTPUT.TranParticulars2 = ""
+	BANCS.OUTPUT.TranRemarks = ""
+	
+	sv_g = MID$(BANCS.INPUT.DeviceId,12,3)
+	
+	IF(FIELDEXISTS(BANCS.INPUT.ReservedField2))THEN
+	#{
+		sv_n = BANCS.INPUT.ReservedField2
+	#}
+	ELSE
+	#{
+		sv_n = " "
+	#}
+	ENDIF
+	
+	sv_d = BANCS.INPUT.SerialNum
+	sv_p = ""
+	sv_f = BANCS.INPUT.Foracid
+	sv_c = BANCS.INPUT.CrForacid
+	BANCS.OUTPUT.RefNum = sv_d
+	PRINT(BANCS.OUTPUT.RefNum)
+	
+	IF ((sv_y == "FEP") OR (sv_y == "SWT") OR (sv_y == "CSC"))THEN
+	#{
+		IF(FIELDEXISTS(BANCS.INPUT.Command))THEN
+		#{
+			IF (BANCS.INPUT.Command == "TRTR") THEN
+			#{
+				sv_p = "Transfert DAB@FBN/"+sv_u+"/"+sv_l+"/"+sv_i
+				PRINT(sv_p)
+				BANCS.OUTPUT.TranParticulars = sv_p
+				BANCS.OUTPUT.TranParticulars = mid$(BANCS.OUTPUT.TranParticulars,0,50)
+				PRINT(BANCS.OUTPUT.TranParticulars)
+				BANCS.OUTPUT.RefNum = BANCS.INPUT.SerialNum
+				BANCS.OUTPUT.TranParticulars2= "ATM:" + LTRIM(BANCS.INPUT.SerialNum,'0') + "/" + BANCS.INPUT.DeviceId
+				BANCS.OUTPUT.TranParticulars2=BANCS.OUTPUT.TranParticulars2+ "/" + BANCS.INPUT.Command + "/" + LTRIM(sv_n, '0')
+				BANCS.OUTPUT.TranParticulars2=mid$(BANCS.OUTPUT.TranParticulars2,0,50)
+				PRINT(BANCS.INPUT.CustCardId)
+				sv_t = TRIM(MID$(BANCS.INPUT.CustCardId,0,6),' ')
+				PRINT(sv_t)
+				sv_w = TRIM(MID$(BANCS.INPUT.CustCardId,12,4),' ')
+				PRINT(sv_w)
+				sv_e = sv_t + "******" + sv_w
+				BANCS.OUTPUT.TranRemarks = sv_e
+				BANCS.OUTPUT.TranRemarks = MID$(BANCS.OUTPUT.TranRemarks,0,30)
+				PRINT(BANCS.OUTPUT.TranRemarks)
+				EXITSCRIPT
+			#}
+			ENDIF
+			
+			
+			####Including Authorization ID in tran_Particulars_2)
+			IF(FIELDEXISTS(BANCS.INPUT.AddnlDataRec))THEN
+			#{
+				IF(STRLEN(BANCS.INPUT.AddnlDataRec) > 0)THEN
+				#{
+					PRINT(BANCS.INPUT.AddnlDataRec)
+					sv_p = MID$(BANCS.INPUT.AddnlDataRec,0,6)
+					PRINT(sv_p)
+					sv_y = LTRIM(sv_p,' ')
+					PRINT(sv_y)
+					IF((MID$(sv_y,0,1) == "|") OR (STRLEN(sv_y) == ""))THEN
+					#{
+						sv_w = ""
+						sv_k = LTRIM(BANCS.INPUT.SerialNum,'0')
+						PRINT(sv_k)
+						IF(STRLEN(sv_k) < 6)THEN
+						#{
+							sv_k = LPAD(sv_k,6,'0')
+							PRINT(sv_k)
+						#}
+						ENDIF
+						PRINT(sv_k)
+						sv_w = sv_k
+					#}
+					ELSE
+					#{
+						sv_w = sv_p
+					#}
+					ENDIF
+				#}
+				ELSE
+				#{
+					sv_w = ""
+					sv_k = LTRIM(BANCS.INPUT.SerialNum,'0')
+					PRINT(sv_k)
+					IF(STRLEN(sv_k) < 6)THEN
+					#{
+						sv_k = LPAD(sv_k,6,'0')
+						PRINT(sv_k)
+					#}
+					ENDIF
+					PRINT(sv_k)
+					sv_w = sv_k
+				#}
+				ENDIF
+			#}
+			ENDIF
+			
+			
+			IF(BANCS.INPUT.Command == "CWDR")THEN
+			#{
+				#BANCS.OUTPUT.TranParticulars = "Retrait DAB FBNDRC "+sv_x+"/"
+				sv_m = BANCS.INPUT.PartTranIdentifier
+				PRINT(sv_m)
+				IF (sv_m == "CUST") THEN
+				#{
+					BANCS.OUTPUT.TranParticulars = "Retrait DAB @FBNGAM /"+sv_u+"/"+sv_l+"/"+sv_i
+					BANCS.OUTPUT.TranParticulars = MID$(BANCS.OUTPUT.TranParticulars,0,50)
+					PRINT(BANCS.OUTPUT.TranParticulars)
+				#}
+				ENDIF
+				IF (sv_m == "CONTRA") THEN
+				#{
+					BANCS.OUTPUT.TranParticulars = "Retrait DAB @FBNGAM /"+sv_u+"/"+sv_l+"/"+sv_i
+					BANCS.OUTPUT.TranParticulars = MID$(BANCS.OUTPUT.TranParticulars,0,50)
+					PRINT(BANCS.OUTPUT.TranParticulars)
+				#}
+				ENDIF
+				IF (sv_m == "FEECUST1") THEN
+				#{
+					BANCS.OUTPUT.TranParticulars = "Frais Retrait DAB @FBNGAM /"+sv_u+"/"+sv_l+"/"+sv_i
+					BANCS.OUTPUT.TranParticulars = MID$(BANCS.OUTPUT.TranParticulars,0,50)
+					PRINT(BANCS.OUTPUT.TranParticulars)
+				#}
+				ENDIF
+				IF (sv_m == "FEECONTRA1") THEN
+				#{
+					BANCS.OUTPUT.TranParticulars = "Frais Retrait DAB @FBNGAM /"+sv_u+"/"+sv_l+"/"+sv_i
+					BANCS.OUTPUT.TranParticulars = MID$(BANCS.OUTPUT.TranParticulars,0,50)
+					PRINT(BANCS.OUTPUT.TranParticulars)
+				#}
+				ENDIF
+				
+				IF (sv_m == "FEECUST2") THEN
+				#{
+					BANCS.OUTPUT.TranParticulars = "TVA Retrait DAB @FBNGAM /"+sv_u+"/"+sv_l+"/"+sv_i
+					BANCS.OUTPUT.TranParticulars = MID$(BANCS.OUTPUT.TranParticulars,0,50)
+					PRINT(BANCS.OUTPUT.TranParticulars)
+				#}
+				ENDIF
+				IF (sv_m == "FEECONTRA2") THEN
+				#{
+					BANCS.OUTPUT.TranParticulars = "TVA Retrait DAB @FBNGAM /"+sv_u+"/"+sv_l+"/"+sv_i
+					BANCS.OUTPUT.TranParticulars = MID$(BANCS.OUTPUT.TranParticulars,0,50)
+					PRINT(BANCS.OUTPUT.TranParticulars)
+				#}
+				ENDIF
+				
+				#BANCS.OUTPUT.TranParticulars = " @" + MID$(BANCS.INPUT.CardAcceptorName,0,50)
+				#sv_v = BANCS.OUTPUT.TranParticulars
+				#sv_o = MID$(sv_v,0,50)
+				#BANCS.OUTPUT.TranParticulars2 = sv_s
+				#print(BANCS.OUTPUT.TranParticulars2)
+				BANCS.OUTPUT.RefNum = BANCS.INPUT.SerialNum
+				BANCS.OUTPUT.TranParticulars2= "GAM:" + LTRIM(BANCS.INPUT.SerialNum,'0') + "/" + LTRIM(BANCS.INPUT.DeviceId,'0')
+				BANCS.OUTPUT.TranParticulars2=BANCS.OUTPUT.TranParticulars2+ "/" + BANCS.INPUT.Command + "/" + LTRIM(sv_n, '0')
+				BANCS.OUTPUT.TranParticulars2=MID$(BANCS.OUTPUT.TranParticulars2,0,50)
+				PRINT(BANCS.INPUT.CustCardId)
+				sv_t = TRIM(MID$(BANCS.INPUT.CustCardId,0,6),' ')
+				PRINT(sv_t)
+				sv_w = TRIM(MID$(BANCS.INPUT.CustCardId,12,4),' ')
+				PRINT(sv_w)
+				sv_e = sv_t + "******" + sv_w
+				BANCS.OUTPUT.TranRemarks = sv_e
+				PRINT(BANCS.OUTPUT.TranRemarks)
+				#BANCS.OUTPUT.TranRemarks = BANCS.INPUT.CustCardId
+				
+				EXITSCRIPT
+			#}
+			ENDIF
+			
+			
+			IF(BANCS.INPUT.Command == "CWRR")THEN
+			#{
+				BANCS.OUTPUT.TranRemarks=BANCS.INPUT.CustCardId
+				BANCS.OUTPUT.TranParticulars="FBNGAM/REV/" +sv_u+"/"+sv_l+"/"+sv_i
+				BANCS.OUTPUT.TranParticulars2= sv_a + ":" + LTRIM(BANCS.INPUT.SerialNum,'0')+"/"+MID$(BANCS.INPUT.DeviceId,0,8)
+				BANCS.OUTPUT.TranParticulars2=BANCS.OUTPUT.TranParticulars2+"/"+BANCS.INPUT.Command+"/"+LTRIM(sv_n,'0')
+				sv_v = BANCS.OUTPUT.TranParticulars
+				sv_o = MID$(sv_v,0,50)
+				BANCS.OUTPUT.TranParticulars = sv_o
+				PRINT(BANCS.OUTPUT.TranParticulars)
+				
+				sv_v = BANCS.OUTPUT.TranParticulars2
+				sv_o = MID$(sv_v,0,50)
+				BANCS.OUTPUT.TranParticulars2 = sv_o
+				PRINT(BANCS.OUTPUT.TranParticulars2)
+				
+				sv_v = BANCS.OUTPUT.TranRemarks
+				sv_o = MID$(sv_v,0,30)
+				BANCS.OUTPUT.TranRemarks = sv_o
+				PRINT(BANCS.OUTPUT.TranRemarks)
+				
+				EXITSCRIPT
+			#}
+			ENDIF
+			
+			
+			
+			IF(BANCS.INPUT.Command == "DBTR")THEN
+			#{
+				IF ((MID$(BANCS.INPUT.DeviceId,0,3)=="284")) THEN
+				#{
+					#BANCS.OUTPUT.TranParticulars = "Retrait TPE FBNDRC "+sv_x+"/"
+					sv_m = BANCS.INPUT.PartTranIdentifier
+					PRINT(sv_m)
+					IF (sv_m == "CUST") THEN
+					#{
+						BANCS.OUTPUT.TranParticulars = "Retrait TPE @FBNGAM /"+sv_u+"/"+sv_l+"/"+sv_i
+						BANCS.OUTPUT.TranParticulars = MID$(BANCS.OUTPUT.TranParticulars,0,50)
+						PRINT(BANCS.OUTPUT.TranParticulars)
+					#}
+					ENDIF
+					IF (sv_m == "CONTRA") THEN
+					#{
+						BANCS.OUTPUT.TranParticulars = "Retrait TPE @FBNGAM /"+sv_u+"/"+sv_l+"/"+sv_i
+						BANCS.OUTPUT.TranParticulars = MID$(BANCS.OUTPUT.TranParticulars,0,50)
+						PRINT(BANCS.OUTPUT.TranParticulars)
+					#}
+					ENDIF
+					IF (sv_m == "FEECUST1") THEN
+					#{
+						BANCS.OUTPUT.TranParticulars = "Frais Retrait TPE @FBNGAM /"+sv_u+"/"+sv_l+"/"+sv_i
+						BANCS.OUTPUT.TranParticulars = MID$(BANCS.OUTPUT.TranParticulars,0,50)
+					#}
+					ENDIF
+					IF (sv_m == "FEECONTRA1") THEN
+					#{
+						BANCS.OUTPUT.TranParticulars = "Frais Retrait TPE @FBNGAM /"+sv_u+"/"+sv_l+"/"+sv_i
+						BANCS.OUTPUT.TranParticulars = MID$(BANCS.OUTPUT.TranParticulars,0,50)
+					#}
+					ENDIF
+					
+					IF (sv_m == "FEECUST2") THEN
+					#{
+						BANCS.OUTPUT.TranParticulars = "TVA Retrait TPE @FBNGAM /"+sv_u+"/"+sv_l+"/"+sv_i
+						BANCS.OUTPUT.TranParticulars = MID$(BANCS.OUTPUT.TranParticulars,0,50)
+					#}
+					ENDIF
+					IF (sv_m == "FEECONTRA2") THEN
+					#{
+						BANCS.OUTPUT.TranParticulars = "TVA Retrait TPE @FBNGAM /"+sv_u+"/"+sv_l+"/"+sv_i
+						BANCS.OUTPUT.TranParticulars = MID$(BANCS.OUTPUT.TranParticulars,0,50)
+					#}
+					ENDIF
+					BANCS.OUTPUT.TranParticulars = MID$(BANCS.OUTPUT.TranParticulars,0,50)
+					BANCS.OUTPUT.RefNum = BANCS.INPUT.SerialNum
+					BANCS.OUTPUT.TranParticulars2= "DAB:" + LTRIM(BANCS.INPUT.SerialNum,'0') + "/" + LTRIM(BANCS.INPUT.DeviceId,'0')
+					BANCS.OUTPUT.TranParticulars2=BANCS.OUTPUT.TranParticulars2+ "/" + BANCS.INPUT.Command + "/" + LTRIM(sv_n, '0')
+					BANCS.OUTPUT.TranParticulars2 = MID$(BANCS.OUTPUT.TranParticulars2,0,50)
+					
+					PRINT(BANCS.INPUT.CustCardId)
+					sv_t = TRIM(MID$(BANCS.INPUT.CustCardId,0,6),' ')
+					PRINT(sv_t)
+					sv_w = TRIM(MID$(BANCS.INPUT.CustCardId,12,4),' ')
+					PRINT(sv_w)
+					sv_e = sv_t + "******" + sv_w
+					BANCS.OUTPUT.TranRemarks = MID$(sv_e,0,30)
+					PRINT(BANCS.OUTPUT.TranRemarks)
+					#BANCS.OUTPUT.TranRemarks = BANCS.INPUT.CustCardId
+					
+				#}
+				ENDIF
+				EXITSCRIPT
+			#}
+			ENDIF
+			
+			
+			IF((BANCS.INPUT.Command == "DBRR"))THEN
+			#{
+				IF ((MID$(BANCS.INPUT.DeviceId,0,3)=="284")) THEN
+				#{
+					sv_p= "REV:Retrait TPE -RDC/" +sv_u+"/"+sv_l+"/"+sv_i
+					BANCS.OUTPUT.TranParticulars = MID$(sv_p,0,50)
+					PRINT(BANCS.OUTPUT.TranParticulars)
+				#}
+				ELSE
+				#{
+					sv_p= "REV:Retrait TPE" +sv_u+"/"+sv_l+"/"+sv_i
+					BANCS.OUTPUT.TranParticulars= MID$(sv_p,0,50)
+					PRINT(BANCS.OUTPUT.TranParticulars)
+				#}
+				ENDIF
+				EXITSCRIPT
+			#}
+			ENDIF
+			IF(BANCS.INPUT.Command == "PRCR")THEN
+			#{
+				IF ((MID$(BANCS.INPUT.DeviceId,0,3)=="284")) THEN
+				#{
+					sv_p= "Achat TPE  -FRDC/" +sv_u+"/"+sv_l+"/"+sv_i
+					BANCS.OUTPUT.TranParticulars = MID$(sv_p,0,50)
+					PRINT(BANCS.OUTPUT.TranParticulars)
+				#}
+				ELSE
+				#{
+					sv_p="Achat TPE " +sv_u+"/"+sv_l+"/"+sv_i
+					BANCS.OUTPUT.TranParticulars= MID$(sv_p,0,50)
+					PRINT(BANCS.OUTPUT.TranParticulars)
+				#}
+				ENDIF
+				EXITSCRIPT
+			#}
+			ENDIF
+			IF((BANCS.INPUT.Command == "PRRR"))THEN
+			#{
+				IF ((MID$(BANCS.INPUT.DeviceId,0,3)=="284")) THEN
+				#{
+					sv_p= "REV:Achat TPE -FBNGAM/" +sv_u+"/"+sv_l+"/"+sv_i
+					BANCS.OUTPUT.TranParticulars = MID$(sv_p,0,50)
+					PRINT(BANCS.OUTPUT.TranParticulars)
+				#}
+				ELSE
+				#{
+					sv_p= "REV:Achat TPE " +sv_u+"/"+sv_l+"/"+sv_i
+					BANCS.OUTPUT.TranParticulars= MID$(sv_p,0,50)
+					PRINT(BANCS.OUTPUT.TranParticulars)
+				#}
+				ENDIF
+				EXITSCRIPT
+			#}
+			ENDIF
+			
+			IF(BANCS.OUTPUT.TranParticulars == "")THEN
+			#{
+				BANCS.OUTPUT.TranParticulars="FBNGAM/"+sv_u+"/"+sv_l+"/"+sv_i
+				BANCS.OUTPUT.TranParticulars2= sv_a + ":" + LTRIM(BANCS.INPUT.SerialNum,'0')+"/"+MID$(BANCS.INPUT.DeviceId,0,8)
+				BANCS.OUTPUT.TranParticulars2 = BANCS.OUTPUT.TranParticulars2+"/"+BANCS.INPUT.Command+"/"+LTRIM(sv_n,'0')
+				BANCS.OUTPUT.TranRemarks = BANCS.INPUT.CustCardId
+			#}
+			ENDIF
+			
+			FAILURE :
+				EXITSCRIPT
+			#}
+			ENDIF
+		#}
+		ENDIF
+
+#####Modification of Charges to bank Induced for Various Transactions ##############33
+if(FIELDEXISTS(BANCS.INPUT.CardAcceptorName))Then
+        sv_o = Trim(BANCS.INPUT.CardAcceptorName,' ')
+        print(sv_o)
+        sv_k = strlen(sv_o)
+        If( sv_k != 0)then
+                sv_q= getiposition(sv_o,"Charge")
+                print(sv_q)
+                If(sv_q != 0)Then
+                        BANCS.OUTPUT.TranParticularsCode =  "342"
+                        #print (BANCS.OUTPUT.TranInfo)
+                Endif
+        Endif
+Endif
+###########End of Charges to bank Induced for FPX DCC ID ######################
+
+         if (sv_y == "FPX")then
+                 BANCS.OUTPUT.TranParticulars = sv_o
+                 BANCS.OUTPUT.TranParticulars2 = "FPX:"+ltrim(BANCS.INPUT.SerialNum,'0')+"/"+mid$(sv_h,0,29)+"/"+sv_n
+                if(FIELDEXISTS(BANCS.INPUT.ReservedField1))Then
+                        if(strlen(BANCS.INPUT.ReservedField1) > 0)then
+                                sv_u = BANCS.INPUT.ReservedField1
+                                print(sv_u)
+                                BANCS.OUTPUT.TranRemarks = sv_u
+                        endif
+                else
+                         BANCS.OUTPUT.TranRemarks = BANCS.INPUT.SerialNum
+                Endif
+                If(Trim(sv_o,' ') == "FIP CHARGES")Then
+                        BANCS.OUTPUT.TranParticularsCode =  "342"
+                        print(BANCS.OUTPUT.TranParticularsCode)
+                Endif
+                 BANCS.OUTPUT.TranParticulars2 = MID$(BANCS.OUTPUT.TranParticulars2,0,50)
+                 BANCS.OUTPUT.TranParticulars = MID$(BANCS.OUTPUT.TranParticulars,0,50)
+                 BANCS.OUTPUT.TranRemarks = MID$(BANCS.OUTPUT.TranRemarks,0,30)
+
+                 print(BANCS.OUTPUT.TranRemarks)
+                 print(BANCS.OUTPUT.TranParticulars)
+                 print(BANCS.OUTPUT.TranParticulars2)
+                exitscript
+         endif
+
+		
+		TRACE OFF
+END-->

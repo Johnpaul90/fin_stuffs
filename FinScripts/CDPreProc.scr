@@ -1,0 +1,563 @@
+#-----------------------------------------------------------------
+#Script Name: CDPreProc.scr
+#Author: ADEBIMPE AYOOLA @ LONGBRIDGE TECHNOLOGIES LIMITED
+#For: FBN SENEGAL ATM and POS Transactions
+#Date:01-11-2016
+#This script is called just after receiving a transaction request
+#or advice from the front end of connect24.
+#It is used to validate all transactions going in to finacle.
+#It contains validations like Freeze on Account, Dormancy,
+#debit limit, balance insufficiency, e.t.c.
+#------------------------------------------------------------------
+<--start
+trace on
+#GETTING CUSTOMER ACCOUNT NUMBER FOR REMOTE ON US TRANSACTIONS-----#
+#-----This is because GIM remote in us transactions doesnt send field 102 with d transaction---#
+#------only the card number is being sent, so we get the account number here!-----#
+#-------------------------END getting customer acct number from card request history table----#
+
+#-----This part checks if there was an initial transaction to be reversed
+print(BANCS.INPUT.Command)
+print(BANCS.INPUT.DccId)
+if (mid$(BANCS.INPUT.Command,2,2) == "RR") then
+	print(BANCS.INPUT.SerialNum)
+	print (BANCS.INPUT.ReservedField2)
+	sv_p = mid$(BANCS.INPUT.ReservedField2,6,6)
+	print(sv_p)
+	sv_a = "stan | select sno from rtt where substr(sno,7,6) = '" + sv_p + "'"
+	sv_b = urhk_dbSelect(sv_a)
+	if (sv_b == "0") then
+		print("there was an initial transaction, Continue")
+	else
+		print("Serial number not found,No initial transaction to be reversed")
+ 		BANCS.OUTPUT.RespCode="99"
+        BANCS.OUTPUT.successOrFailure="F"
+        exitscript
+    endif
+	#---------------------------------------------------------------------------
+	#####################################################
+	#Setting right the origTranAmt in case of reversals
+	#####################################################	
+	if (BANCS.INPUT.OrigTranAmt != "") then
+	    	print("reversal with origTranAmt")
+    		sv_z=mid$(BANCS.INPUT.OrigTranAmt,0,16)
+	    	BANCS.OUTPUT.OrigTranAmt=sv_z
+	    	BANCS.INPUT.OrigTranAmt=sv_z
+	    	print(BANCS.OUTPUT.OrigTranAmt)
+	endif
+endif
+        
+########################################################
+#To obtain solid and fetch new account
+#if the Debit account sent in is the old one
+########################################################
+
+if (FIELDEXISTS(BANCS.INPUT.Foracid)) then
+	#if (BANCS.INPUT.Foracid != "") then
+		sv_c = BANCS.INPUT.Foracid
+		print(sv_c)
+		sv_v = "first,acid|select sol_id,acid from gam where foracid='" + BANCS.INPUT.Foracid + "'"
+        	sv_f = urhk_dbSelect(sv_v)
+        	if (sv_f == "0") then
+                        BANCS.OUTPUT.SolId = BANCS.OUTPARAM.first
+                        BANCS.INPUT.SolId = BANCS.OUTPUT.SolId
+			BANCS.OUTPUT.Acid =BANCS.OUTPARAM.acid
+			BANCS.INPUT.Acid = BANCS.OUTPUT.Acid
+                        print(BANCS.OUTPUT.SolId)
+			Print(BANCS.OUTPUT.Acid)
+			sv_z = BANCS.OUTPUT.Acid
+                        print (sv_z)
+
+              	else
+	      		print("Old Account detected")
+			sv_s = "origacc | select finacle_acct_num from custom.fbn_am where old_acct_num = '" + sv_c + "'"
+			sv_r =  urhk_dbSelectWithBind(sv_s)
+			if (sv_r == "0")then
+				print("Got Here Select Successful")
+				BANCS.INPUT.Foracid = BANCS.OUTPARAM.origacc
+				BANCS.OUTPUT.Foracid = BANCS.INPUT.Foracid
+				print(BANCS.INPUT.Foracid)
+				print(BANCS.OUTPUT.Foracid)
+				
+				sv_v = "first,acid|select sol_id,acid from gam where foracid='" + BANCS.INPUT.Foracid + "'"
+       				sv_f = urhk_dbSelect(sv_v)
+              			if (sv_f == "0") then
+                        		BANCS.OUTPUT.SolId = BANCS.OUTPARAM.first
+                       			BANCS.INPUT.SolId = BANCS.OUTPUT.SolId
+					BANCS.OUTPUT.Acid =BANCS.OUTPARAM.acid
+					BANCS.INPUT.Acid = BANCS.OUTPUT.Acid
+                       			print(BANCS.OUTPUT.SolId)
+					Print(BANCS.OUTPUT.Acid)
+					sv_z = BANCS.OUTPUT.Acid
+					print (sv_z)	
+	      			else
+					BANCS.OUTPUT.RespCode="99"
+					BANCS.OUTPUT.successOrFailure="F"
+					exitscript
+				endif
+	      		endif
+	      	endif
+       #endif
+endif
+	
+################################
+#####To fetch for credit account
+################################
+
+if (FIELDEXISTS(BANCS.INPUT.CrForacid)) then
+	#if (BANCS.INPUT.CrForacid != "") then
+		sv_c = BANCS.INPUT.CrForacid
+		print(sv_c)
+		sv_k = "first|select sol_id from gam where foracid='" + BANCS.INPUT.CrForacid + "'"
+        	sv_y = urhk_dbSelect(sv_k)
+              	if (sv_y == "0") then
+                    	BANCS.OUTPUT.CrSolId = BANCS.OUTPARAM.first
+                    	print(BANCS.OUTPUT.CrSolId)
+              	else
+			print("Old Account detected")
+			sv_s = "origacc | select finacle_acct_num from custom.fbn_am where old_acct_num = '" + sv_c + "'"
+			sv_r =  urhk_dbSelect(sv_s)
+			if(sv_r == "0") then
+				BANCS.INPUT.CrForacid = BANCS.OUTPARAM.origacc
+				BANCS.OUTPUT.CrForacid = BANCS.INPUT.CrForacid
+				print(BANCS.INPUT.CrForacid)
+				print(BANCS.OUTPUT.CrForacid)
+				
+				sv_k = "first|select sol_id from gam where foracid='" + BANCS.INPUT.CrForacid + "'"
+       				sv_y = urhk_dbSelect(sv_k)
+              			if (sv_y == "0") then
+                   			BANCS.OUTPUT.CrSolId = BANCS.OUTPARAM.first
+                    			print(BANCS.OUTPUT.CrSolId)
+				else
+					BANCS.OUTPUT.RespCode="99"
+					BANCS.OUTPUT.successOrFailure="F"
+					exitscript
+				endif
+	      		endif
+	       endif
+	#endif
+endif
+
+
+###################################################################
+###Make all self-linked transfers across all channels Bank Induced
+###################################################################
+
+if(FIELDEXISTS(BANCS.INPUT.Command))then
+	sv_d = BANCS.INPUT.Command
+	sv_b = ""
+	sv_w = ""
+
+	if(BANCS.INPUT.Command=="TRTR") then
+		sv_k = "drcustid|select cust_id from gam where foracid='" + BANCS.INPUT.Foracid + "'"
+		sv_y = urhk_dbSelect(sv_k)
+		if (sv_y == "0") Then
+			sv_w = BANCS.OUTPARAM.drcustid
+			print(sv_w)
+		endif
+		if(sv_w == "")then
+			print("No cust_id for this account")
+		else
+			sv_c = "crcustid|select cust_id from gam where foracid='" + BANCS.INPUT.CrForacid + "'"
+			sv_v = urhk_dbSelect(sv_c)
+			if (sv_v == "0") Then
+				sv_b = BANCS.OUTPARAM.crcustid
+				print(sv_b)
+			endif
+			if(sv_b == "")Then
+				print("No custID for credit account")
+			else
+				if(sv_w == sv_b)then
+					BANCS.OUTPUT.TranInfo = "  TBI"
+					print(BANCS.OUTPUT.TranInfo)
+				endif
+			endif
+		endif
+
+	endif
+
+endif
+############################################################
+#Account and Balance Validation
+############################################################
+sv_a=MID$(BANCS.INPUT.DccId, 0, 3)
+sv_d = BANCS.INPUT.Command
+if((sv_a == "FEP") or (sv_a == "SWT") OR (sv_a == "MGX") OR (sv_a == "EMP") OR (sv_a == "CSC")OR (sv_a == "BWY")OR (BANCS.INPUT.DccId == "FPX") OR  (BANCS.INPUT.DccId == "NIP")) then
+	if((sv_d != "CRTR") AND (sv_d != "BLIR")) then
+		if(FIELDEXISTS(BANCS.INPUT.Foracid))then
+			IF(strlen(BANCS.INPUT.Foracid) > 0)THEN
+				sv_r = urhk_getAcctDetailsInRepository(BANCS.INPUT.Foracid)
+				if (sv_r!=0) then
+					BANCS.OUTPUT.RespCode="99"
+					BANCS.OUTPUT.successOrFailure="F"
+					exitscript
+				endif
+				print(BANCS.INPUT.CrForacid)
+				sv_n = CDOUBLE(BANCS.OUTPARAM.EffAvailableAmt)
+				sv_p = BANCS.INPUT.TranAmt
+				print(sv_p)
+				sv_r = BANCS.OUTPARAM.acctOwnerShip
+				print(sv_r)
+				sv_o = BANCS.OUTPARAM.freezeCode
+				print(sv_o)
+				sv_l = BANCS.OUTPARAM.schmType
+				print(sv_l)
+				sv_u = BANCS.OUTPARAM.acctCrncyCode 
+				print(sv_u)
+				sv_q = BANCS.OUTPARAM.acctCloseflg
+				print(sv_q)
+				sv_t = BANCS.OUTPARAM.schmCode
+				print(sv_t)
+				
+				#if ((sv_t == "CA202") OR (sv_t == "SA302")) then
+                    			#BANCS.OUTPUT.Fee=""
+                    			#BANCS.OUTPUT.OrigFee=""
+		    		#endif
+
+				##########################################
+				#Disallow Frozen Account
+				##########################################
+				if ((sv_o == "D") or (sv_o == "T"))then
+					BANCS.OUTPUT.RespCode="99"
+					BANCS.OUTPUT.successOrFailure="F"
+					exitscript
+				endif
+
+				if (sv_q == "Y") then
+					BANCS.OUTPUT.RespCode="99"
+					BANCS.OUTPUT.successOrFailure="F"
+					exitscript
+				endif
+	
+				##########################################
+				#Disallow Closed Account
+				##########################################
+				if (sv_q == "Y") then
+					BANCS.OUTPUT.RespCode="99"
+					BANCS.OUTPUT.successOrFailure="F"
+					exitscript
+				endif
+
+				###################################################################
+				#deny activity on dormant/inactive account on ODA Type of Account
+				###################################################################
+				sv_k = "first|select cam.acct_status from cam, gam where gam.foracid='" + BANCS.INPUT.Foracid
+				sv_k = sv_k  + "' and gam.acid=cam.acid and cam.acct_status != 'A'"
+				sv_y = urhk_dbSelect(sv_k)
+				if (sv_y == "0") then
+					BANCS.OUTPUT.RespCode="99"
+					BANCS.OUTPUT.successOrFailure="F"
+					exitscript              
+				endif
+
+				###################################################################
+				#deny activity on dormant/inactive account on SBA Type of Account
+				###################################################################
+				sv_k = "first|select a.acct_status from tbaadm.smt a ,tbaadm.gam b where b.foracid = '"+BANCS.INPUT.Foracid+"' and b.acid=a.acid and a.acct_status != 'A' and b.bank_id = '06'"
+				sv_y = urhk_dbSelect(sv_k)
+				if (sv_y == "0") then
+					BANCS.OUTPUT.RespCode="99"
+					BANCS.OUTPUT.successOrFailure="F"
+					exitscript
+				endif
+
+				####################################################################
+				#Do NOT allow debiting below minimum balance for savings account
+				####################################################################
+				sv_p = BANCS.INPUT.TranAmt
+				print(sv_p)
+				sv_d = BANCS.INPUT.Command
+				print(sv_d)
+				print(sv_n)
+				sv_w = CDOUBLE(ltrim(sv_p,'0'))/100
+				print(sv_w)
+				sv_x = sv_n - sv_w
+				print(sv_x)
+				if ((sv_l=="SBA") OR (sv_l=="CAA")) then
+					if ((sv_d != "CWRR") AND (sv_d != "TRRR") AND (sv_d != "DBRR") AND (sv_d != "CRRR") AND (sv_d != "PRRR") AND (sv_d != "CDAR") AND (sv_d != "MSIR")) THEN
+						sv_h = "minbal|select min_bal_for_chq_book from tbaadm.ssp where schm_code='" + sv_t + "' and crncy_code='" +sv_u+ "' and bank_id = '06'"	
+						print(sv_h)
+				
+						if (sv_h == "0") then
+							sv_h = cdouble(BANCS.OUTPARAM.minbal)
+							print(sv_h)
+							if (sv_h > sv_x) then
+								BANCS.OUTPUT.RespCode="04"
+								BANCS.OUTPUT.successOrFailure="F"
+								exitscript
+							endif
+						endif
+						print (sv_z)
+						sv_b = "acctminbal|select ACCT_MIN_BALANCE from tbaadm.smt where bank_id = '06' and acid ='" + sv_z + "'"
+						sv_j = urhk_dbSelect(sv_b)
+						if (sv_j == "0") then
+							sv_i = cdouble(BANCS.OUTPARAM.acctminbal)
+							print(sv_i)
+							if (sv_i > sv_x) then
+								BANCS.OUTPUT.RespCode="04"
+                                                        	BANCS.OUTPUT.successOrFailure="F"
+                                                        	exitscript
+							endif
+						endif
+					endif
+				endif
+
+
+
+
+				####################################################################################
+				#Do not allow transaction where transaction amount is greater than customer balance
+				####################################################################################
+				if (sv_p != "") then
+					sv_p = cdouble(MID$(sv_p,0,14) + '.' + MID$(sv_p,14,2))
+					print(sv_p)
+					if((sv_p > sv_n) and (sv_r != "O")) then
+						if ((sv_d == "TRTR") or (sv_d == "CWDR") or (sv_d == "CRTR") or (sv_d == "PRCR") or (sv_d == "PYTR")) then
+							print(sv_p)
+							BANCS.OUTPUT.RespCode="04"
+							BANCS.OUTPUT.successOrFailure="F"
+							exitscript
+						endif					
+					endif
+				endif
+
+			#{ End if strlen(Foracid)
+			ENDIF
+		#{ Endif Field Exists
+		endif
+	#{ Endif Not CRTR and BLIR
+	endif
+
+	##################################################
+	#This Section Handles Customer Account Inquiry
+	##################################################
+	if(BANCS.INPUT.Command=="CALR")then
+		if(FIELDEXISTS(BANCS.INPUT.Foracid)==0)then
+			GOTO FAILURE
+		endif
+
+		if(BANCS.INPUT.Foracid=="")then
+			GOTO FAILURE
+		endif
+
+		if(strlen(BANCS.INPUT.Foracid) > 0)then
+			sv_a=urhk_getAcctDetailsInRepository(BANCS.INPUT.Foracid)
+			if(sv_a != 0)then
+				GOTO FAILURE
+			endif
+		endif
+
+		BANCS.OUTPUT.ReservedField1="0150" + LPAD(TRIM(BANCS.OUTPARAM.custId), 9) + "ALL"
+		print(BANCS.OUTPUT.ReservedField1)
+		print(BANCS.INPUT.ReservedField1)
+		GOTO SUCCESS		
+	endif
+		
+
+	############################################################################
+	#Validate Dr and Cr Accounts for TRTR. Set Linked Account
+	############################################################################
+	if((BANCS.INPUT.Command=="TRTR")OR(BANCS.INPUT.Command=="TRRR"))then
+		if(FIELDEXISTS(BANCS.INPUT.Foracid))then
+			if(strlen(BANCS.INPUT.Foracid) > 0)then
+		       		sv_a=urhk_getAcctDetailsInRepository(BANCS.INPUT.Foracid)
+				if(sv_a!=0)then
+					BANCS.OUTPUT.RespCode="03"
+					BANCS.OUTPUT.successOrFailure="F"
+		        		exitscript
+				endif
+
+				sv_p=BANCS.OUTPARAM.custId
+				####acct currency code for debit acct##
+				sv_t = BANCS.OUTPARAM.acctCrncyCode
+				print(sv_p)
+				print(sv_t)
+				sv_o = BANCS.OUTPARAM.freezeCode
+				print(sv_o)
+				##########################################
+				#Disallow Frozen Account
+				##########################################
+				if ((sv_o == "D") or (sv_o == "T"))then
+					BANCS.OUTPUT.RespCode="99"
+					BANCS.OUTPUT.successOrFailure="F"
+					exitscript
+				endif
+		
+		   		if(FIELDEXISTS(BANCS.INPUT.CrForacid))then
+					if(strlen(BANCS.INPUT.CrForacid) > 0)then
+						sv_a=urhk_getAcctDetailsInRepository(BANCS.INPUT.CrForacid)
+						if(sv_a!=0)then	
+							BANCS.OUTPUT.RespCode="03"
+							BANCS.OUTPUT.successOrFailure="F"
+				        		exitscript
+						endif	
+						sv_q=BANCS.OUTPARAM.custId
+						print(sv_q)
+						###acct currency code for credit acct###
+						sv_u = BANCS.OUTPARAM.acctCrncyCode    
+						print(sv_u)
+						sv_o = BANCS.OUTPARAM.freezeCode
+						print(sv_o)
+						sv_s = BANCS.OUTPARAM.schmCode 
+						print(sv_s)
+						sv_i = BANCS.OUTPARAM.ClearBalance
+						print(sv_i)
+						sv_p = BANCS.OUTPARAM.glSubHeadCode
+						print(sv_p)
+						##########################################
+						#Disallow Frozen Account
+						##########################################
+						if ((sv_o == "D") or (sv_o == "T"))then
+							BANCS.OUTPUT.RespCode="99"
+							BANCS.OUTPUT.successOrFailure="F"
+							exitscript
+						endif
+						##########################################
+						#Disallow multi-currency transfer
+						##########################################
+						if (sv_t != sv_u) then
+							BANCS.OUTPUT.RespCode="03"
+							BANCS.OUTPUT.SuccessOrFailure="F"
+							GOTO FAILURE
+						endif
+	                    			##########################################################################
+						##To prevent checking for linking of internal office accounts
+						##########################################################################
+						sv_r = BANCS.OUTPARAM.acctOwnerShip
+						if(sv_r != "O") then
+							if(TRIM(sv_p)==TRIM(sv_q))then
+								#Linked Funds Transfer
+								BANCS.OUTPUT.Fee=""
+								BANCS.OUTPUT.OrigFee=""
+								BANCS.STDIN.Linked="Y"
+							else
+								BANCS.STDIN.Linked="N"
+							endif
+						endif
+					endif
+				endif
+			endif
+		endif
+	endif
+
+	###########################################################
+	### Check Credit oriented transactions ####################
+	###########################################################
+	if((BANCS.INPUT.Command=="CRTR")OR(BANCS.INPUT.Command=="CRRR"))then
+		if(FIELDEXISTS(BANCS.INPUT.CrForacid))then
+			if(strlen(BANCS.INPUT.CrForacid) > 0)then
+				sv_a=urhk_getAcctDetailsInRepository(BANCS.INPUT.CrForacid)
+				if(sv_a!=0)then
+					BANCS.OUTPUT.RespCode="03"
+					BANCS.OUTPUT.successOrFailure="F"
+               				exitscript
+				endif
+				sv_q=BANCS.OUTPARAM.custId
+				print(sv_q)
+				sv_n = BANCS.OUTPARAM.acctCrncyCode
+				print(sv_n)
+				sv_o = BANCS.OUTPARAM.freezeCode
+				print(sv_o)
+				sv_q = BANCS.OUTPARAM.acctCloseflg
+				print(sv_q)
+				sv_s = BANCS.OUTPARAM.schmCode 
+				print(sv_s)
+				sv_i = BANCS.OUTPARAM.ClearBalance
+				print(sv_i)
+				sv_p = BANCS.OUTPARAM.glSubHeadCode
+				print(sv_p)
+				##########################################
+				#Disallow Frozen Account  
+				##########################################
+				if ((sv_o == "D") or (sv_o == "T"))then
+					BANCS.OUTPUT.RespCode="99"
+					BANCS.OUTPUT.successOrFailure="F"
+					exitscript
+				endif
+				##########################################
+				#Disallow Closed Account
+				##########################################
+				if (sv_q == "Y") THEN
+					BANCS.OUTPUT.RespCode="99"
+					BANCS.OUTPUT.successOrFailure="F"
+					exitscript
+				endif
+
+				###################################################################
+				#deny activity on dormant/inactive account on ODA Type of Account
+				###################################################################
+				sv_k = "first|select cam.acct_status from cam, gam where gam.foracid='"
+				sv_k = sv_k + BANCS.INPUT.CrForacid + "' and gam.acid=cam.acid and cam.acct_status != 'A'"
+				sv_y = urhk_dbSelect(sv_k)
+				if (sv_y == "0") THEN
+					BANCS.OUTPUT.RespCode="99"
+					BANCS.OUTPUT.successOrFailure="F"
+					exitscript              
+				endif
+
+				###################################################################
+				#deny activity on dormant/inactive account on SBA Type of Account
+				###################################################################
+				sv_k = "first|select a.acct_status from tbaadm.smt a ,tbaadm.gam b where b.foracid = '"+BANCS.INPUT.CrForacid+"' and b.acid=a.acid and a.acct_status != 'A'"
+				sv_y = urhk_dbSelect(sv_k)
+				if (sv_y == "0") THEN
+					BANCS.OUTPUT.RespCode="99"
+					BANCS.OUTPUT.successOrFailure="F"
+					exitscript
+				endif
+			endif
+		endif
+	endif
+endif
+
+                                #####Modification of transaction currency code for FPX DCC ID ##############33
+        if(FIELDEXISTS(BANCS.INPUT.DccId))then
+                sv_a=MID$(BANCS.INPUT.DccId, 0, 3)
+                #print(sv_a)
+                If(sv_a == "FPX") Then
+                        sv_k = "actCur|select ACCT_CRNCY_CODE from gam where foracid='" + BANCS.INPUT.Foracid + "'"
+                        sv_y = urhk_dbSelect(sv_k)
+                        If (sv_y == "0") Then
+                                BANCS.OUTPUT.TranCrncy = BANCS.OUTPARAM.actCur
+                                BANCS.INPUT.TranCrncy = BANCS.OUTPARAM.actCur
+                                #print(BANCS.OUTPUT.TranCrncy)
+                                #print(BANCS.INPUT.TranCrncy)
+                        Endif
+                Endif
+        Endif
+        ###########End of FPX Transaction Currency Code Change######################
+
+#####Modification of Charges to bank Induced for FPX , BRT and NIP DCC ID ##############33
+if(FIELDEXISTS(BANCS.INPUT.CardAcceptorName))Then
+        sv_a = Trim(BANCS.INPUT.CardAcceptorName,' ')
+        print(sv_a)
+        sv_l = strlen(sv_a)
+        If( sv_l != 0)then
+                sv_q= getiposition(sv_a,"Charge")
+                print(sv_q)
+                If(sv_q != 0)Then
+                        BANCS.OUTPUT.TranInfo = "  TBI"
+                Endif
+        Endif
+Endif
+###########End of Charges to bank Induced for NIP DCC ID ######################
+
+
+        #####Modification of Charges to bank Induced for NIP DCC ID ##############33
+        if(FIELDEXISTS(BANCS.INPUT.DccId))then
+                sv_a=MID$(BANCS.INPUT.DccId, 0, 3)
+                #print(sv_a)
+                If(sv_a == "NIP") Then
+                        sv_o = MID$(BANCS.INPUT.CardAcceptorName,0,40)
+                        If(Trim(sv_o,' ') == "FIP CHARGES")Then
+                                BANCS.OUTPUT.TranInfo = "  TBI"
+                                #print (BANCS.OUTPUT.TranInfo)
+                        Endif
+                Endif
+        Endif
+        ###########End of Charges to bank Induced for NIP DCC ID ######################
+
+
+exitscript
+trace off
+end-->

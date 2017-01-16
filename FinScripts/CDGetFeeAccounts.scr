@@ -1,0 +1,492 @@
+#============================================================
+# IMPORTANT: Auto Generated Header. DO NOT CHANGE MANUALLY.
+# Product: Finacle Core
+# Category: User Defined
+# Script: fees.scr
+# Type: NA|default
+# Description: These types of scripts do not belong to any particular category and are standalone scripts with no script specific repositories or fields.
+# Author: longbridge2
+# Date: 08/06/15 8:27 PM
+# Modification Log:
+#============================================================
+<--START
+# Script body goes here
+TRACE ON
+# Script body goes here
+#GETTING CUSTOMER ACCOUNT NUMBER FOR REMOTE ON US TRANSACTIONS-----#
+#-----This is because GIM remote in us transactions doesnt send field 102 with d transaction---#
+#------only the card number is being sent, so we get the account number here!-----#
+#IF (BANCS.INPUT.Foracid == "00000101110101") then
+        #PRINT(BANCS.INPUT.CustCardId)
+        #sv_a = BANCS.INPUT.CustCardId
+        #sv_b = mid$(sv_a,12,4)
+        #print(sv_b)
+        #sv_u = "pan | select foracid from custom.cardrequests_hist where substr(PAN,13,4) = '" + sv_b +"'"
+        #sv_p = urhk_dbSelect(sv_u)
+        #if (sv_p == "0") then
+                #print("gotten")
+                #BANCS.INPUT.Foracid = BANCS.OUTPARAM.pan
+                #print(BANCS.INPUT.Foracid)
+        #else
+                #print("acctnum not found")
+                #BANCS.OUTPUT.RespCode="99"
+                #BANCS.OUTPUT.successOrFailure="F"
+                #exitscript
+        #endif
+#endif
+#-------------------------END getting customer acct number from card request history table----#
+########################################################
+#To obtain solid and fetch new account
+#if the Debit account sent in is the old one
+########################################################
+	IF (FIELDEXISTS(BANCS.INPUT.Foracid)) THEN
+	#{
+		sv_c = BANCS.INPUT.Foracid
+		PRINT(sv_c)
+		sv_v = "first|select sol_id from gam where foracid='" + BANCS.INPUT.Foracid + "'"
+		sv_f = urhk_dbSelect(sv_v)
+		IF (sv_f == "0") THEN
+		#{
+			BANCS.OUTPUT.SolId = BANCS.OUTPARAM.first
+			BANCS.INPUT.SolId = BANCS.OUTPUT.SolId
+			PRINT(BANCS.OUTPUT.SolId)
+			#}
+		ELSE
+			#{
+			PRINT("Old Account detected")
+			sv_s = "origacc | select finacle_acct_num from custom.fbn_am where old_acct_num='"
+			sv_s = sv_s + BANCS.INPUT.Foracid+"'"
+			PRINT(sv_s)
+			sv_r =  urhk_dbSelect(sv_s)
+			IF (sv_r == "0")THEN
+			#{
+				PRINT("Got Here Select Successful")
+				BANCS.INPUT.Foracid = BANCS.OUTPARAM.origacc
+				BANCS.OUTPUT.Foracid = BANCS.INPUT.Foracid
+				PRINT(BANCS.INPUT.Foracid)
+				PRINT(BANCS.OUTPUT.Foracid)
+				
+				sv_v = "first|select sol_id from gam where foracid='" + BANCS.INPUT.Foracid + "'"
+				sv_f = urhk_dbSelect(sv_v)
+				IF (sv_f == "0") THEN
+				#{
+					BANCS.OUTPUT.SolId = BANCS.OUTPARAM.first
+					BANCS.INPUT.SolId = BANCS.OUTPUT.SolId
+					PRINT(BANCS.OUTPUT.SolId)
+					#}
+				ELSE
+					#{
+					BANCS.OUTPUT.RespCode="99"
+					BANCS.OUTPUT.successOrFailure="F"
+					EXITSCRIPT
+				#}
+				ENDIF
+			#}
+			ENDIF
+		#}
+		ENDIF
+	#}
+	ENDIF
+	
+	################################
+	#####To fetch for credit account
+	################################
+	
+	IF (FIELDEXISTS(BANCS.INPUT.CrForacid)) THEN
+	#{
+		sv_c = BANCS.INPUT.CrForacid
+		PRINT(sv_c)
+		sv_k = "first|select sol_id from gam where foracid='" + BANCS.INPUT.CrForacid + "'"
+		sv_y = urhk_dbSelect(sv_k)
+		IF (sv_y == "0") THEN
+		#{
+			BANCS.OUTPUT.CrSolId = BANCS.OUTPARAM.first
+			PRINT(BANCS.OUTPUT.CrSolId)
+			#}
+		ELSE
+			#{
+			PRINT("Old Account detected")
+			sv_s = "origacc | select finacle_acct_num from custom.fbn_am where old_acct_num = '"
+			sv_s = sv_s + BANCS.INPUT.CrForacid + "'"
+			sv_r =  urhk_dbSelect(sv_s)
+			IF(sv_r == "0")THEN
+			#{
+				BANCS.INPUT.CrForacid = BANCS.OUTPARAM.origacc
+				BANCS.OUTPUT.CrForacid = BANCS.INPUT.CrForacid
+				PRINT(BANCS.INPUT.CrForacid)
+				PRINT(BANCS.OUTPUT.CrForacid)
+				
+				sv_k = "first|select sol_id from gam where foracid='" + BANCS.INPUT.CrForacid + "'"
+				sv_y = urhk_dbSelect(sv_k)
+				IF (sv_y == "0") THEN
+				#{
+					BANCS.OUTPUT.CrSolId = BANCS.OUTPARAM.first
+					PRINT(BANCS.OUTPUT.CrSolId)
+					#}
+				ELSE
+					#{
+					BANCS.OUTPUT.RespCode="99"
+					BANCS.OUTPUT.successOrFailure="F"
+					EXITSCRIPT
+				#}
+				ENDIF
+			#}
+			ENDIF
+		#}
+		ENDIF
+	#}
+	ENDIF
+	
+	#################################
+	#End Account Obtain SolId
+	#################################
+	
+	PRINT(BANCS.INPUT.DeviceId)
+	sv_c = LTRIM(BANCS.INPUT.DeviceId,'0')
+	sv_r = MID$(sv_c,0,1)
+	sv_f = MID$(sv_c,0,4)
+	sv_g = MID$(sv_c,4,4)
+	sv_h = MID$(sv_c,0,4)
+	PRINT(sv_r)
+	PRINT(sv_f)
+	PRINT(sv_g)
+	
+	PRINT(BANCS.INPUT.CustCardId)
+	sv_a = BANCS.INPUT.CustCardId
+	sv_b = mid$(sv_a, 0, 6)
+	sv_o = BANCS.INPUT.DevType
+	PRINT(BANCS.INPUT.DevType)
+	
+	sv_m=BANCS.INPUT.DccId
+	PRINT(sv_m)
+
+		
+	########################EXITSCRIPT FOR POS TRANSACTIONS#############
+	if (sv_o =="POS") then
+		print(sv_o)
+		exitscript
+	endif
+	#####################################################################
+	
+	######################EXITSCRIPT FOR ATM NOT ON US(NO FEE ACCOUNTS)##
+	#if (sv_b != "506186") then
+		#print (sv_b)
+		#exitscript
+	#endif
+	##################################################
+	#########To get customer account sol_id
+	#################################################
+	#sv_v = "first|select sol_id from gam where foracid='"+BANCS.INPUT.Foracid+"'"
+	#	sv_f = urhk_dbSelect(sv_v)
+	# if (sv_f == "0") Then
+	#      	BANCS.OUTPUT.SolId = BANCS.OUTPARAM.first
+	#      	BANCS.INPUT.SolId = BANCS.OUTPUT.SolId
+	#      	print(BANCS.OUTPUT.SolId)
+	# else
+	#	BANCS.OUTPUT.RespCode="99"
+	#	BANCS.OUTPUT.successOrFailure="F"
+	#	exitscript
+	# endif
+	#############################################
+	##########to get fee account for the sol
+	###############################################
+	#	sv_w ="frst|select foracid from tbaadm.gam where bacid ='SERV_CHG_ATM' and "
+	#sv_w = sv_w + " sol_id = '" + BANCS.OUTPUT.SolId
+	#print(sv_w)
+	#sv_w=sv_w+ "' and acct_crncy_code='CDF'"
+	#print(sv_w)
+	#	sv_t = urhk_dbSelect(sv_w)
+	#if (sv_t == "0") Then
+	#BANCS.OUTPUT.officeacct = BANCS.OUTPARAM.frst
+	#BANCS.INPUT.officeacct = BANCS.OUTPUT.officeacct
+	#print(BANCS.OUTPUT.officeacct)
+	#else
+	#BANCS.OUTPUT.RespCode="99"
+	#BANCS.OUTPUT.successOrFailure="F"
+	#exitscript
+	#endif
+	#BANCS.OUTPUT.TranFeeCustAcct1 = BANCS.INPUT.Foracid
+	#print(BANCS.OUTPUT.TranFeeCustAcct1)
+	#BANCS.OUTPUT.TranFeeContraAcct1 =BANCS.OUTPUT.officeacct
+	#print(BANCS.OUTPUT.TranFeeContraAcct1)
+	#BANCS.OUTPUT.successOrFailure = "S"
+	#exitscript
+	#####################################################################
+
+
+
+#########################################################
+# Segment for FPX
+#########################################################
+
+        if ( (MID$(BANCS.INPUT.DccId, 0, 3) == "FPX")  ) then
+                if(FIELDEXISTS(BANCS.INPUT.ReservedField2)) then
+                                sv_o = strlen(BANCS.INPUT.ReservedField2)
+                                print(sv_o)
+                                if (strlen(BANCS.INPUT.ReservedField2)=="70") then
+                                        sv_o = ltrim(Mid$(trim(BANCS.INPUT.ReservedField2),0,14),'0')
+                                        sv_p = ltrim(Mid$(trim(BANCS.INPUT.ReservedField2),14,14),'0')
+                                        sv_q = ltrim(Mid$(trim(BANCS.INPUT.ReservedField2),28,14),'0')
+                                        sv_r = ltrim(Mid$(trim(BANCS.INPUT.ReservedField2),42,14),'0')
+                                        sv_s = ltrim(Mid$(trim(BANCS.INPUT.ReservedField2),56,14),'0')
+                                        print(sv_o)
+                                        print(sv_p)
+                                        print(sv_q)
+                                        print(sv_r)
+                                        print(sv_s)
+
+                                        if(sv_o != "")then
+                                                BANCS.OUTPUT.TranFeeCustAcct1 = BANCS.INPUT.Foracid
+                                                BANCS.OUTPUT.TranFeeContraAcct1= sv_o
+                                        endif
+
+                                        if(sv_p != "")then
+                                                BANCS.OUTPUT.TranFeeCustAcct2 = BANCS.INPUT.Foracid
+                                                BANCS.OUTPUT.TranFeeContraAcct2= sv_p
+                                        endif
+
+                                        if(sv_q != "")then
+                                                BANCS.OUTPUT.TranFeeCustAcct3 = BANCS.INPUT.Foracid
+                                                BANCS.OUTPUT.TranFeeContraAcct3= sv_q
+                                        endif
+
+                                        if(sv_r != "")then
+                                                BANCS.OUTPUT.TranFeeCustAcct4 = BANCS.INPUT.Foracid
+                                                BANCS.OUTPUT.TranFeeContraAcct4= sv_r
+                                        endif
+
+                                        if(sv_s != "")then
+                                                BANCS.OUTPUT.TranFeeCustAcct5 = BANCS.INPUT.Foracid
+                                                BANCS.OUTPUT.TranFeeContraAcct5= sv_s
+                                        endif
+
+                                        GOTO SUCCESS
+
+
+                                endif
+                endif
+        endif
+
+#########################################################
+# End of Segment for FPX
+#########################################################
+
+	
+	
+	IF ((BANCS.INPUT.DccId == "FEP") OR (BANCS.INPUT.DccId == "SWT") OR (BANCS.INPUT.DccId == "CSC") OR (BANCS.INPUT.DccId == "FPX") OR  (BANCS.INPUT.DccId == "NIP")) THEN
+	#{
+		
+		IF (sv_o == "ATM") THEN
+		#{
+			IF ((BANCS.INPUT.Command == "CWDR") OR (BANCS.INPUT.Command == "CWRR")) THEN
+			#{
+				IF ((sv_b == "506186")) THEN
+				#{
+					###############################
+					# REMOTE-ON-US CASH WITHDRAWAL
+					###############################
+					IF (sv_f == "1FGM") THEN
+					#{
+						IF (BANCS.INPUT.TranCrncy == "GMD")THEN
+						#{
+							##################################
+							#ATM Device Fee Accounts
+							##################################
+							
+							##############################################################
+							# FBN CUSTOMER ON OTHER BANKS ATM DEVICE - (REMOTE-ON-US TRANSACTION)
+							##############################################################
+							sv_c = BANCS.OUTPUT.SolId
+							BANCS.OUTPUT.TranFeeCustAcct1 = BANCS.INPUT.Foracid
+							PRINT(BANCS.OUTPUT.TranFeeCustAcct1)
+							BANCS.OUTPUT.TranFeeContraAcct1 = sv_c + "34389003301"
+							PRINT(BANCS.OUTPUT.TranFeeContraAcct1)
+							BANCS.OUTPUT.TranFeeContraAcct1 = sv_c + "55090000201"
+							PRINT(BANCS.OUTPUT.TranFeeContraAcct1)
+							BANCS.OUTPUT.TranFeeContraAcct1 = sv_c + "55090000301"
+							PRINT(BANCS.OUTPUT.TranFeeContraAcct1)
+							BANCS.OUTPUT.TranFeeCustAcct2 = BANCS.INPUT.Foracid
+							PRINT(BANCS.OUTPUT.TranFeeCustAcct2)
+							BANCS.OUTPUT.TranFeeContraAcct2 = sv_c + "20033104000"
+							PRINT(BANCS.OUTPUT.TranFeeContraAcct2)
+							BANCS.OUTPUT.successOrFailure = "S"
+							EXITSCRIPT
+						#}
+						ENDIF
+					ENDIF
+					############################################
+					# REMOTE-ON-US CASH WITHDRAWAL 
+					############################################
+					IF (sv_f != "1FGM") THEN
+					#{
+						IF (BANCS.INPUT.TranCrncy == "GMD")THEN
+						#{
+							##################################
+							#ATM Device Fee Accounts
+							##################################
+							
+							##############################################################
+							# FBN CUSTOMER ON OTHER BANKS ATM DEVICE - (REMOTE-ON-US TRANSACTION)
+							##############################################################
+							BANCS.OUTPUT.TranFeeCustAcct1 = BANCS.INPUT.Foracid
+							PRINT(BANCS.OUTPUT.TranFeeCustAcct1)
+							BANCS.OUTPUT.TranFeeContraAcct1 = sv_c + "34389003301"
+							PRINT(BANCS.OUTPUT.TranFeeContraAcct1)
+							BANCS.OUTPUT.TranFeeContraAcct1 = sv_c + "55090000301"
+							PRINT(BANCS.OUTPUT.TranFeeContraAcct1)
+							BANCS.OUTPUT.TranFeeCustAcct2 = BANCS.INPUT.Foracid
+							PRINT(BANCS.OUTPUT.TranFeeCustAcct2)
+							BANCS.OUTPUT.TranFeeContraAcct2 = sv_c + "20033104000"
+							PRINT(BANCS.OUTPUT.TranFeeContraAcct2)
+							BANCS.OUTPUT.successOrFailure = "S"
+							EXITSCRIPT
+						#}
+						ENDIF
+					ENDIF
+				ENDIF
+			ENDIF
+			
+			IF ((BANCS.INPUT.Command == "PRCR") OR (BANCS.INPUT.Command == "PRRR")) THEN
+			#{
+				IF ((sv_b == "506186")) THEN
+				#{
+					####################################################
+					# REMOTE-ON-US BALANCE INQ 
+					###################################################
+					IF (sv_f == "1FGM") THEN
+					#{
+						IF (BANCS.INPUT.TranCrncy == "GMD")THEN
+						#{
+							##################################
+							#ATM Device Fee Accounts
+							##################################
+							
+							##############################################################
+							# FBN CUSTOMER ON OTHER BANKS ATM DEVICE - (REMOTE-ON-US TRANSACTION)
+							##############################################################
+							BANCS.OUTPUT.TranFeeCustAcct1 = BANCS.INPUT.Foracid
+							PRINT(BANCS.OUTPUT.TranFeeCustAcct1)
+							BANCS.OUTPUT.TranFeeContraAcct1 = sv_c + "34389003301"
+							PRINT(BANCS.OUTPUT.TranFeeContraAcct1)
+							BANCS.OUTPUT.TranFeeContraAcct1 = sv_c + "55090000201"
+                                                        PRINT(BANCS.OUTPUT.TranFeeContraAcct1)
+							BANCS.OUTPUT.TranFeeContraAcct1 = sv_c + "55090000301"
+                                                        PRINT(BANCS.OUTPUT.TranFeeContraAcct1)	
+							BANCS.OUTPUT.TranFeeCustAcct2 = BANCS.INPUT.Foracid
+							PRINT(BANCS.OUTPUT.TranFeeCustAcct2)
+							BANCS.OUTPUT.TranFeeContraAcct2 = sv_c + "20033104000"
+							PRINT(BANCS.OUTPUT.TranFeeContraAcct2)
+							BANCS.OUTPUT.successOrFailure = "S"
+							EXITSCRIPT
+						#}
+						ENDIF
+					ENDIF
+					############################################
+					# REMOTE-ON-US BALANCE INQ MasterCard
+					############################################
+					IF (sv_f != "1FGM") THEN
+					#{
+						IF (BANCS.INPUT.TranCrncy == "GMD")THEN
+						#{
+							##################################
+							#ATM Device Fee Accounts
+							##################################
+							
+							##############################################################
+							# FBN CUSTOMER ON OTHER BANKS ATM DEVICE - (REMOTE-ON-US TRANSACTION)
+							##############################################################
+							BANCS.OUTPUT.TranFeeCustAcct1 = BANCS.INPUT.Foracid
+							PRINT(BANCS.OUTPUT.TranFeeCustAcct1)
+							BANCS.OUTPUT.TranFeeContraAcct1 = sv_c + "34389003301"
+							PRINT(BANCS.OUTPUT.TranFeeContraAcct1)
+						        BANCS.OUTPUT.TranFeeContraAcct1 = sv_c + "55090000301"
+                                                        PRINT(BANCS.OUTPUT.TranFeeContraAcct1)
+							BANCS.OUTPUT.TranFeeCustAcct2 = BANCS.INPUT.Foracid
+							PRINT(BANCS.OUTPUT.TranFeeCustAcct2)
+							BANCS.OUTPUT.TranFeeContraAcct2 = sv_c + "20033104000"
+							PRINT(BANCS.OUTPUT.TranFeeContraAcct2)
+							BANCS.OUTPUT.successOrFailure = "S"
+							EXITSCRIPT
+						#}
+						ENDIF
+					ENDIF
+				ENDIF
+			ENDIF
+
+			IF ((BANCS.INPUT.Command == "CDAR") OR (BANCS.INPUT.Command == "CDRR")) THEN
+			#{
+				IF ((sv_b == "506186")) THEN
+				#{
+					####################################################
+					# ON-US PURCHASE 
+					###################################################
+					 IF (sv_f == "1FGM") THEN
+					#{
+						IF (BANCS.INPUT.TranCrncy == "GMD")THEN
+						#{
+							##################################
+							#ATM Device Fee Accounts
+							##################################
+							
+							##############################################################
+							# FBN CUSTOMER ON OTHER BANKS ATM DEVICE - (REMOTE-ON-US TRANSACTION)
+							##############################################################
+							BANCS.OUTPUT.TranFeeCustAcct1 = BANCS.INPUT.Foracid
+							PRINT(BANCS.OUTPUT.TranFeeCustAcct1)
+							BANCS.OUTPUT.TranFeeContraAcct1 = sv_c + ""
+							PRINT(BANCS.OUTPUT.TranFeeContraAcct1)
+							BANCS.OUTPUT.TranFeeCustAcct2 = BANCS.INPUT.Foracid
+							PRINT(BANCS.OUTPUT.TranFeeCustAcct2)
+							BANCS.OUTPUT.TranFeeContraAcct2 = sv_c + "20033104000"
+							PRINT(BANCS.OUTPUT.TranFeeContraAcct2)
+							BANCS.OUTPUT.successOrFailure = "S"
+							EXITSCRIPT
+						#}
+						ENDIF
+					ENDIF
+				ENDIF
+
+				IF ((sv_b == "506186")) THEN
+				#{
+					############################################
+					# REMOTE-ON-US PURCHASE
+					############################################
+					IF (sv_f != "1FGM") THEN
+					#{
+						IF (BANCS.INPUT.TranCrncy == "GMD")THEN
+						#{
+							##################################
+							#ATM Device Fee Accounts
+							##################################
+							
+							##############################################################
+							# FBN CUSTOMER ON OTHER BANKS ATM DEVICE - (REMOTE-ON-US TRANSACTION)
+							##############################################################
+							BANCS.OUTPUT.TranFeeCustAcct1 = BANCS.INPUT.Foracid
+							PRINT(BANCS.OUTPUT.TranFeeCustAcct1)
+							BANCS.OUTPUT.TranFeeContraAcct1 = sv_c + ""
+							PRINT(BANCS.OUTPUT.TranFeeContraAcct1)
+							BANCS.OUTPUT.TranFeeCustAcct2 = BANCS.INPUT.Foracid
+							PRINT(BANCS.OUTPUT.TranFeeCustAcct2)
+							BANCS.OUTPUT.TranFeeContraAcct2 = sv_c + "20033104000"
+							PRINT(BANCS.OUTPUT.TranFeeContraAcct2)
+							BANCS.OUTPUT.successOrFailure = "S"
+							EXITSCRIPT
+						#}
+						ENDIF
+					ENDIF
+				ENDIF
+			ENDIF
+					
+		#} -- END ATM TRANSACTIONS
+		ENDIF
+
+	#}
+	ENDIF
+	#} -- END DCC ID CHECK
+	
+	TRACE OFF
+	EXITSCRIPT
+	
+END-->
+

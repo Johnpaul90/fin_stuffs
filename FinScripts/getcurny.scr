@@ -1,0 +1,65 @@
+<--START
+TRACE ON
+#============================================================
+# Source Name:-   getcurny.scr
+# Date:-          17-Aug-2015
+# Description:-   Populate currency Label in fdts criterial page
+# Author :-       Omowunmi Akinola/CWG
+# Bank :-         First Bank Nigeria(Congo Project)
+#=============================================================
+
+#---------------------------------------------------
+# Create the necessary repositories and classes
+#---------------------------------------------------
+
+IF (REPEXISTS("FBN") == 0 ) THEN
+	CREATEREP("FBN")
+ENDIF
+
+
+IF (CLASSEXISTS("FBN","DATA") == 0) THEN
+	CREATECLASS("FBN","DATA",5)
+ENDIF
+
+IF (FIELDEXISTS(BANCS.INPUT.serialNum) == 1) THEN
+	FBN.DATA.attCtrNo = BANCS.INPUT.serialNum
+#}
+
+ENDIF
+
+print(FBN.DATA.attCtrNo)
+
+
+#-------------------------
+#Validating input attCtrNo
+#-------------------------
+sv_q = "acctDetls|select CURRENCY from custom.att_master_table  "
+sv_q = sv_q + " where ATT_SEQ_NO  = (upper('" + FBN.DATA.attCtrNo + "'))"
+sv_q = sv_q + " and bank_id = '"+ BANCS.STDIN.contextBankId +"'"
+print(sv_q)
+#print(BANCS.OUTPARAM.acctDetls)
+BANCS.INPARAM.BINDVARS = FBN.DATA.attCtrNo 
+print(BANCS.INPARAM.BINDVARS)
+
+sv_d = urhk_dbSelectWithBind(sv_q)
+print(sv_d)
+IF (sv_d == "0") THEN 
+
+	FBN.DATA.acctDetls = BANCS.OUTPARAM.acctDetls
+	sv_z = urhk_SetOrbOut("SuccessOrFailure|S")
+	print(sv_z)
+	IF(FBN.DATA.acctDetls != "")THEN
+		sv_z = urhk_SetOrbOut("acctDetls|"+FBN.DATA.acctDetls)
+		print(sv_z)
+	ENDIF
+ELSE
+	sv_z = urhk_SetOrbOut("SuccessOrFailure|S")
+	sv_z = urhk_SetOrbOut("acctDetls| ")
+	print(sv_z)
+ENDIF
+
+
+
+TRACE OFF
+EXITSCRIPT
+END-->

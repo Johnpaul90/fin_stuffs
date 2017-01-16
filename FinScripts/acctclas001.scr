@@ -1,0 +1,429 @@
+<--start
+trace on
+#====================================================
+# Called Scripts               :    <none>
+# Author                       :    Louis C. (Alpha-Plus Technologies & Services Limited)
+# Name                         :    blktracc001.scr
+# Date                         :    03-06-2016
+# Description                  :    To Transfer Bulk Account between GLs Using An Upload File 
+# Input                        :    Using file selected from desktop
+# File Format                  :    FORACID   |  GL_SUBHEAD  | VERIFIER USER_ID
+#--------------------------------------------------------------------------
+trace on
+
+print(MID$(BANCS.STDIN.BODDate,0,2))
+#---------------------
+# Include library
+#---------------------
+libname CUSTOMSO
+################################
+# Creation of Rep and Classes
+#################################
+IF (REPEXISTS("gen")==0) THEN
+#{
+        CREATEREP("gen")
+#}
+ENDIF
+###########################
+# Creation of String type  Class
+###########################
+IF (CLASSEXISTS("gen","GLtr")==0) THEN
+#{
+        CREATECLASS("gen","GLtr",5)
+#}
+ELSE
+#{
+        DELETECLASS("gen","GLtr")
+        CREATECLASS("gen","GLtr",5)
+#}
+ENDIF
+
+gen.GLtr.bodDate = MID$(BANCS.STDIN.BODDate,0,10)
+gen.GLtr.funcCode = BANCS.INPUT.funcCode
+print(gen.GLtr.funcCode)
+gen.GLtr.evnt = BANCS.INPUT.evnt
+print(gen.GLtr.evnt)
+#gen.GLtr.fseq = BANCS.INPUT.fseq
+
+IF (gen.GLtr.funcCode != "A") Then
+
+#Verify If Batch has been uploaded by Verifier
+     sv_s = urhk_SetOrbOut("SuccessOrFailure|N")
+     sv_z = urhk_SetOrbOut("Error_1|Error^Please Click < Show Input > button...^file")
+     Goto Finish
+endif
+
+print(BANCS.INPUT.uploadFileName)
+print(BANCS.INPUT.uploadIPAddress)
+IF((FIELDEXISTS(BANCS.INPUT.uploadFileName) == 0 ) OR (FIELDEXISTS(BANCS.INPUT.uploadIPAddress) == 0 )) THEN
+#{
+        sv_z = "SuccessOrFailure|N"
+        sv_u = urhk_SetOrbOut(sv_z)
+        sv_z = "Error_01|ERROR^Upload Config Error: Invalid Input Params for File Transfer.^file"
+        sv_u = urhk_SetOrbOut(sv_z)
+        gen.GLtr.SuccessOrFailure = "F"
+#}
+ENDIF
+
+gen.GLtr.fileopen = "N"
+gen.GLtr.fileName = "blktracc.csv"
+
+sv_a = urhk_getEnv("CDCI_LOGS")
+print(sv_a)
+        IF (sv_a == 0) THEN
+                print(BANCS.OUTPARAM.envValue)
+                gen.GLtr.ONS_path = BANCS.OUTPARAM.envValue
+                print(gen.GLtr.ONS_path)
+        else
+                sv_z = urhk_SetOrbOut("Error_1|Error^Failure in locating CDCI_LOGS, environment variable^file")
+                exitscript
+                print("Env variable ONS/log not found")
+        ENDIF
+
+
+sv_r = urhk_getEnv("FILEUPLOAD_JLIMO_PORTNUM")
+print(sv_r)
+	IF (sv_r != 0) THEN
+	#{
+		BANCS.INPUT.uploadPortNum = ""
+		sv_z = "SuccessOrFailure|N"
+		sv_u = urhk_SetOrbOut(sv_z)
+		sv_z = "Error_02|ERROR^ENV FILEUPLOAD_JLIMO_PORTNUM not set.^upldFilename"
+		sv_u = urhk_SetOrbOut(sv_z)
+		gen.GLtr.SuccessOrFailure = "F"
+	#}
+	ELSE
+	#{
+        	print(BANCS.OUTPARAM.envValue)
+        	BANCS.INPUT.uploadPortNum = BANCS.OUTPARAM.envValue
+        	print(BANCS.INPUT.uploadPortNum)
+	#}
+	ENDIF
+
+################################################################################
+#ENV. Parameters required For File Transfer
+################################################################################
+
+sv_j="LANG|"
+sv_k = urhk_putEnv(sv_j)
+print(sv_k)
+
+sv_m="LC_ALL|"
+sv_n= urhk_putEnv(sv_m)
+print(sv_n)
+
+sv_r = urhk_getEnv("LIMOC_CONFIG_PATH")
+	IF (sv_r != 0) THEN
+	#{
+        	print("ENV LIMOC_CONFIG_PATH not set, taking default value")
+        	sv_j="UPLOAD_CLIENT_FILE|$TBA_PROD_ROOT/services/finlistval/fce/finlistval-client.cfg"
+        	sv_k = urhk_putEnv(sv_j)
+	#}
+	ELSE
+	#{
+        	print(BANCS.OUTPARAM.envValue)
+        	sv_j="UPLOAD_CLIENT_FILE|"+BANCS.OUTPARAM.envValue
+        	sv_k = urhk_putEnv(sv_j)
+	#}
+	ENDIF
+
+sv_m="UPLOAD_CLIENT_LOG|FileUpload"
+print(sv_m)
+sv_n= urhk_putEnv(sv_m)
+print(sv_n)
+
+print(BANCS.INPUT.uploadIPAddress)
+IF (BANCS.INPUT.uploadPortNum != "") THEN
+        sv_i = BANCS.INPUT.uploadIPAddress + ":" + BANCS.INPUT.uploadPortNum
+        print(sv_i)
+ENDIF
+
+sv_f=BANCS.INPUT.file
+print(sv_f)
+sv_a="Filename | select REPLACE('"+sv_f+"','\','/') from dual"
+print(sv_a)
+sv_w=urhk_dbSelect(sv_a)
+print(sv_w)
+
+print(BANCS.OUTPARAM.Filename)
+print(BANCS.INPUT.uploadFileName)
+sv_f = BANCS.INPUT.file
+print(sv_f)
+##############################################################################
+sv_k = 0
+		sv_h = 1
+		sv_f = BANCS.INPUT.file
+		print(sv_f)
+			while (sv_h > 0)
+				sv_o = strlen(sv_f)
+                                print(sv_o)
+				sv_h = getposition(sv_f,"\")
+                                print(sv_h)
+				sv_k = sv_k + sv_h 
+                                print(sv_k)
+				sv_f = mid$(sv_f,sv_h,sv_o)
+				print(sv_f)
+			DO
+##############################################################################
+print(sv_f)
+gen.GLtr.inputFileName = sv_f
+print(sv_i)
+sv_o = strlen(sv_f)
+sv_h = getposition(sv_f,".")
+
+IF (sv_h != 0) THEN
+	sv_u = mid$(sv_f,sv_h,sv_o) 
+	gen.GLtr.fileType = sv_u
+ELSE
+	gen.GLtr.fileType = "xls"
+ENDIF
+print(gen.GLtr.fileType)
+
+sv_g = BANCS.INPUT.uploadFileName
+print(sv_g)
+
+	IF (MID$(BANCS.INPUT.uploadFileName,0,1) == "/") THEN
+
+    		sv_z = BANCS.INPUT.uploadFileName
+        	print(sv_z)
+        	sv_a = "chmod 777 "+sv_z
+        	print(sv_a)
+        	sv_b = system(sv_a)
+        	print(sv_b)
+        	sv_g = BANCS.INPUT.uploadFileName
+        	print(sv_g)
+        	### FILENAME IS PREFIXED WITH ESC CHAR FOR UNIX FILESYSTEM
+                	sv_p = "uploadclient LIMO://" + sv_i + "//\ " + sv_g
+        		print(sv_p)
+	ELSE
+        	sv_p = "uploadclient LIMO://" + sv_i + "///" + sv_g
+	ENDIF
+
+print(sv_p)
+
+sv_x = system(sv_p)
+print(sv_x)
+
+	IF (sv_x != 0) THEN
+	#{
+		sv_z = "SuccessOrFailure|N"
+		sv_u = urhk_SetOrbOut(sv_z)
+		sv_z = "Error_03|ERROR^File Transfer Unsucessful. Please contact your Administrator^upldFilename"
+		sv_u = urhk_SetOrbOut(sv_z)
+		Goto Finish
+                #sv_z = BANCS.INPUT.uploadFileName+" File Transfer Sucessful"
+		#sv_u = urhk_SetOrbOut("RESULT_MSG|"+sv_z)
+	#}
+	ENDIF
+
+if ((gen.GLtr.fileType == "CSV") OR (gen.GLtr.fileType == "csv")) THEN
+        gen.GLtr.fileName = sv_f
+        print(gen.GLtr.fileName)
+        Goto ReadFile
+ELSE
+        sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+        sv_u = urhk_SetOrbOut("Error_1|Error^ONLY CSV File Extenstion is Allowed Here^file")
+        Goto Finish
+ENDIF
+
+#---------------------------------
+# Convert Transfered XLS TO CSV
+#---------------------------------
+xlsToCSV:
+
+gen.GLtr.fileLoc = gen.GLtr.ONS_path + "/" + BANCS.STDIN.userId + "/" + gen.GLtr.fileName
+print(gen.GLtr.fileLoc)
+
+gen.GLtr.comFile = "xlsupload.com"
+gen.GLtr.locFile = " "
+sv_u = urhk_getFileLocation("COM|xlsupload.com")
+print(sv_u)
+IF ( sv_u == 0) THEN
+#{
+
+gen.GLtr.locFile = BANCS.OUTPARAM.fileLocation
+print(gen.GLtr.locFile)
+
+sv_p = gen.GLtr.locFile + gen.GLtr.comFile + " " + "CONV" + " " + gen.GLtr.ONS_path + "/" + BANCS.STDIN.userId + "/" + sv_f + " " + gen.GLtr.locFile+"../xml/blktracc.xml" + " " + gen.GLtr.fileName + " " + "blktracc.xls"
+print(sv_p)
+
+sv_s = SYSTEM(sv_p)
+print(sv_s)
+
+IF (sv_s != "0") THEN
+        #gen.GLtr.respMsg = "File does not exists"
+        sv_s = urhk_SetOrbOut("SuccessOrFailure|N")
+        sv_z = urhk_SetOrbOut("Error_1|Error^Failure in generating dat file, file access^file")
+        Goto Finish
+endif
+
+
+ReadFile:
+IF (gen.GLtr.evnt == "Y") THEN
+
+##---Confirm No Existing Records For User
+#=========================================
+#Verify If existing records for the user
+#=========================================
+        sv_s="rcnt|Select count(seq_num) from custom.ACCT_CLASS_TBL where USER_ID='"+BANCS.STDIN.userId+"' And STATUS!='Y'"
+        print(sv_s)
+        sv_a=urhk_DBSelect(sv_s)
+        print(sv_a)
+        if (sv_a != 0) then
+            sv_s = urhk_SetOrbOut("SuccessOrFailure|N")
+            sv_z = urhk_SetOrbOut("Error_1|Error^You Have Existing Record Pending Verification^file")
+            Goto Finish
+        endif
+        if (BANCS.OUTPARAM.rcnt != 0) then
+           sv_s = urhk_SetOrbOut("SuccessOrFailure|N")
+           sv_z = urhk_SetOrbOut("Error_1|Error^You Have Existing Record Pending Verification^file")
+           Goto Finish
+        endif
+#=======================
+# Retrieve the content of 
+# input file
+#=======================
+#Create a batch SEQunce Number 
+  sv_s="seqVal|select CUSTOM.GLTRNSEQ.nextval from dual"
+  sv_s=urhk_DBSelect(sv_s)
+  print(sv_s)
+IF (sv_s != "0") THEN
+   sv_s = urhk_SetOrbOut("SuccessOrFailure|N")
+   sv_z = urhk_SetOrbOut("Error_1|Error^Unable To Generate Sequence For The Process...^file")
+   Goto Finish
+endif
+gen.GLtr.seqVal=BANCS.OUTPARAM.seqVal
+print(gen.GLtr.seqVal)
+
+sv_u = urhk_getFileLocation("COM|AcctClass.com")
+print(sv_u)
+IF (sv_u != 0) THEN
+#{
+   	sv_s = urhk_SetOrbOut("SuccessOrFailure|N")
+       	sv_z = urhk_SetOrbOut("Error_1|Error^Could Not Retrieve COM File^file")
+       	Goto Finish
+#}
+EndIf
+
+sv_a = BANCS.OUTPARAM.fileLocation + "AcctClass.com"
+sv_w =sv_a + " " + gen.GLtr.ONS_path +"/"+BANCS.STDIN.userId+"/"+gen.GLtr.fileName+" "+BANCS.STDIN.userId+" "+BANCS.STDIN.contextBankId+" "+gen.GLtr.seqVal+" "+gen.GLtr.bodDate
+print(sv_w)
+
+sv_s=system(sv_w)
+print(sv_s)
+
+IF (sv_s != "0") THEN
+   sv_s = urhk_SetOrbOut("SuccessOrFailure|N")
+   sv_z = urhk_SetOrbOut("Error_1|Error^Failure Reading file...^file")
+   Goto Finish
+else
+
+  gen.GLtr.sql_scr="AcctClass.sql" 
+  gen.GLtr.lst_scr="AcctClass.lst" 
+  sv_r = "exebatch bauu9151  " + " " + gen.GLtr.sql_scr + " > " + gen.GLtr.lst_scr   
+  print(sv_r)
+  sv_v = system(sv_r)
+  print(sv_v)
+  if(sv_v != 0) then
+     sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+     sv_u = urhk_SetOrbOut("Error_1|Error^Unable To Process/Store Uploaded Record^file")
+     Goto Finish
+  endif
+  gen.GLtr.vmsg="Account Past Due Maintenance Uploaded Successfully;Pending Verification.."
+  Goto RESULT
+
+Endif
+
+ENDIF
+
+
+IF (gen.GLtr.evnt == "X") THEN
+
+#=========================================
+##---Confirm No Existing Records For User
+#=========================================
+#Verify If existing records for the user
+#=========================================
+        sv_s="rcnt|Select count(seq_num) from custom.ACCT_MEAC_TBL where USER_ID='"+BANCS.STDIN.userId+"' And STATUS!='Y'"
+        print(sv_s)
+        sv_a=urhk_DBSelect(sv_s)
+        print(sv_a)
+        if (sv_a != 0) then
+            sv_s = urhk_SetOrbOut("SuccessOrFailure|N")
+            sv_z = urhk_SetOrbOut("Error_1|Error^You Have Existing Record Pending Verification^file")
+            Goto Finish
+        endif
+        if (BANCS.OUTPARAM.rcnt != 0) then
+           sv_s = urhk_SetOrbOut("SuccessOrFailure|N")
+           sv_z = urhk_SetOrbOut("Error_1|Error^You Have Existing Record Pending Verification^file")
+           Goto Finish
+        endif
+#=======================
+# Retrieve the content of 
+# input file
+#=======================
+#Create a batch SEQunce Number 
+  sv_s="seqVal|select CUSTOM.GLTRNSEQ.nextval from dual"
+  sv_s=urhk_DBSelect(sv_s)
+  print(sv_s)
+IF (sv_s != "0") THEN
+   sv_s = urhk_SetOrbOut("SuccessOrFailure|N")
+   sv_z = urhk_SetOrbOut("Error_1|Error^Unable To Generate Sequence For The Process...^file")
+   Goto Finish
+endif
+gen.GLtr.seqVal=BANCS.OUTPARAM.seqVal
+print(gen.GLtr.seqVal)
+
+sv_u = urhk_getFileLocation("COM|AcctMeac.com")
+print(sv_u)
+IF (sv_u != 0) THEN
+#{
+   	sv_s = urhk_SetOrbOut("SuccessOrFailure|N")
+       	sv_z = urhk_SetOrbOut("Error_1|Error^Could Not Retrieve COM File^file")
+       	Goto Finish
+#}
+EndIf
+
+sv_a = BANCS.OUTPARAM.fileLocation + "AcctMeac.com"
+sv_w =sv_a + " " + gen.GLtr.ONS_path +"/"+BANCS.STDIN.userId+"/"+gen.GLtr.fileName+" "+BANCS.STDIN.userId+" "+BANCS.STDIN.contextBankId+" "+gen.GLtr.seqVal+" "+gen.GLtr.bodDate
+print(sv_w)
+
+sv_s=system(sv_w)
+print(sv_s)
+
+IF (sv_s != "0") THEN
+   sv_s = urhk_SetOrbOut("SuccessOrFailure|N")
+   sv_z = urhk_SetOrbOut("Error_1|Error^Failure Reading file...^file")
+   Goto Finish
+else
+
+  gen.GLtr.sql_scr="AcctMeac.sql" 
+  gen.GLtr.lst_scr="AcctMeac.lst" 
+  sv_r = "exebatch bauu9151  " + " " + gen.GLtr.sql_scr + " > " + gen.GLtr.lst_scr   
+  print(sv_r)
+  sv_v = system(sv_r)
+  print(sv_v)
+  if(sv_v != 0) then
+     sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+     sv_u = urhk_SetOrbOut("Error_1|Error^Unable To Process/Store Uploaded Record^file")
+     Goto Finish
+  endif
+  gen.GLtr.vmsg="Effective Asset Classification Uploaded Successfully;Pending Verification.." 
+
+Endif
+
+#===end of MEAC === 
+ENDIF
+
+
+RESULT:
+
+   sv_u = urhk_SetOrbOut("RESULT_MSG|"+gen.GLtr.vmsg)
+   sv_s = urhk_SetOrbOut("SuccessOrFailure|Y")
+
+
+Finish:
+
+exitscript	
+trace off
+end-->

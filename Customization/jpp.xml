@@ -1,0 +1,223 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<group_details>
+  <multi_tab_menu>N</multi_tab_menu>
+  <page_list>
+    <page_details>
+      <type_of_page>INITIAL</type_of_page>
+      <page_name>cust_dummy_InitialPage.jsp</page_name>
+    </page_details>
+    <page_details>
+      <type_of_page>DETAILS</type_of_page>
+      <page_name>jpp_det.jsp</page_name>
+    </page_details>
+    <page_details>
+      <type_of_page>RESULT</type_of_page>
+      <page_name>jpp_res.jsp</page_name>
+    </page_details>
+  </page_list>
+  <invocation_list>
+    <invocation_details>
+      <action_code>GETDATA</action_code>
+      <function_code>A</function_code>
+      <invocation_name>jpp001.scr</invocation_name>
+    </invocation_details>
+    <invocation_details>
+      <action_code>GETDATA</action_code>
+      <function_code>I</function_code>
+      <invocation_name>jpp002.scr</invocation_name>
+    </invocation_details>
+    <invocation_details>
+      <action_code>GETDATA</action_code>
+      <function_code>D</function_code>
+      <invocation_name>jpp002.scr</invocation_name>
+    </invocation_details>
+    <invocation_details>
+      <action_code>VALIDATE</action_code>
+      <function_code>NA</function_code>
+      <invocation_name>jpp001.scr</invocation_name>
+    </invocation_details>
+    <invocation_details>
+      <action_code>UPLOAD</action_code>
+      <function_code>NA</function_code>
+      <invocation_name>BATCH0001.scr</invocation_name>
+    </invocation_details>
+    <invocation_details>
+      <action_code>SUBMIT</action_code>
+      <function_code>NA</function_code>
+      <invocation_name>BATCHADD001.scr</invocation_name>
+    </invocation_details>
+  </invocation_list>
+  <tab_details_list />
+  <multirec_list />
+  <field_list>
+    <field>
+      <name>funcCode</name>
+      <datatype>String</datatype>
+      <mr_field>N</mr_field>
+      <group_field>Y</group_field>
+    </field>
+    <field>
+      <name>Message</name>
+      <datatype>String</datatype>
+      <mr_field>N</mr_field>
+      <group_field>N</group_field>
+    </field>
+    <field>
+      <name>fileName</name>
+      <datatype>String</datatype>
+      <mr_field>N</mr_field>
+      <group_field>Y</group_field>
+    </field>
+    
+    
+
+	<field>
+      <name>file</name>
+      <datatype>String</datatype>
+      <mr_field>N</mr_field>
+      <group_field>Y</group_field>
+    </field>
+	
+
+
+    <field>
+      <name>date_of_deferal</name>
+      <datatype>String</datatype>
+      <mr_field>N</mr_field>
+      <group_field>Y</group_field>
+    </field>
+  
+    <field>
+      <name>branch</name>
+      <datatype>String</datatype>
+      <mr_field>N</mr_field>
+      <group_field>Y</group_field>
+    </field>
+
+
+    <field>
+      <name>group</name>
+      <datatype>String</datatype>
+      <mr_field>N</mr_field>
+      <group_field>Y</group_field>
+    </field>
+
+
+    <field>
+      <name>cifId</name>
+      <datatype>String</datatype>
+      <mr_field>N</mr_field>
+      <group_field>Y</group_field>
+    </field>
+
+
+
+    <field>
+      <name>customer</name>
+      <datatype>String</datatype>
+      <mr_field>N</mr_field>
+      <group_field>Y</group_field>
+    </field>
+
+
+
+    <field>
+      <name>facility_type</name>
+      <datatype>String</datatype>
+      <mr_field>N</mr_field>
+      <group_field>Y</group_field>
+    </field>
+
+
+
+    <field>
+      <name>amount</name>
+      <datatype>String</datatype>
+      <mr_field>N</mr_field>
+      <group_field>Y</group_field>
+    </field>
+
+
+
+
+    <field>
+      <name>date_of_form3800B</name>
+      <datatype>String</datatype>
+      <mr_field>N</mr_field>
+      <group_field>Y</group_field>
+    </field>
+
+
+    <field>
+      <name>conditions_defered</name>
+      <datatype>String</datatype>
+      <mr_field>N</mr_field>
+      <group_field>Y</group_field>
+    </field>
+
+
+
+    <field>
+      <name>period</name>
+      <datatype>String</datatype>
+      <mr_field>N</mr_field>
+      <group_field>Y</group_field>
+    </field>
+
+
+
+    <field>
+      <name>expiryDate_deferal</name>
+      <datatype>String</datatype>
+      <mr_field>N</mr_field>
+      <group_field>Y</group_field>
+    </field>
+
+
+
+    <field>
+      <name>soucrce_of_deferal</name>
+      <datatype>String</datatype>
+      <mr_field>N</mr_field>
+      <group_field>Y</group_field>
+    </field>
+
+
+    <field>
+      <name>exception</name>
+      <datatype>String</datatype>
+      <mr_field>N</mr_field>
+      <group_field>Y</group_field>
+    </field>
+
+
+    <field>
+      <name>remarks_history</name>
+      <datatype>String</datatype>
+      <mr_field>N</mr_field>
+      <group_field>Y</group_field>
+    </field>
+
+
+
+    <field>
+      <name>bm</name>
+      <datatype>String</datatype>
+      <mr_field>N</mr_field>
+      <group_field>Y</group_field>
+    </field>
+
+
+    <field>
+      <name>rm</name>
+      <datatype>String</datatype>
+      <mr_field>N</mr_field>
+      <group_field>Y</group_field>
+    </field>
+    
+
+
+
+</field_list>
+</group_details>
+

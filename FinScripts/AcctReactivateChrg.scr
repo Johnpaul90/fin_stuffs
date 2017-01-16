@@ -1,0 +1,158 @@
+<--start
+trace on
+sv_a = urhk_b2k_PrintRepos("BANCS")
+######################################################################################
+# Source Name   : AcctReactivateChrg.scr 
+# Date          : 12-09-2014
+# Description   : Ensures On Account Reactivation; Collect Charge Flg is returned to Y;
+#               : Account record in ELE table is reset to Account Status Date
+# Called Script : None
+# Calling Script: None
+# Author        : Louis C.
+# Bank 		: FIRST BANK GHANA
+# < Version No.> <Date> <Author Name>  <Description>
+#  0.1     12-SEP-2014  Louis C.  Draft Version
+########################################################################################
+
+sv_c = REPEXISTS("CUST")
+if(sv_c == 0 ) then
+        CREATEREP("CUST")
+endif
+sv_c = CLASSEXISTS("CUST","DOM")
+if (sv_c == 0 ) then
+        CREATECLASS("CUST","DOM",5)
+endif
+
+#Batch job instead of accountwise basis
+IF (FIELDEXISTS(BANCS.STDIN.contextBankId)) THEN
+        CUST.DOM.bankId = BANCS.STDIN.contextBankId
+ELSE
+        CUST.DOM.bankId = ""
+ENDIF
+CUST.DOM.BODDate = mid$(BANCS.STDIN.BODDate,0,10)
+
+#==Determine the account ===# 
+#==Fetch All accounts Reactivated today
+               #BANCS.INPARAM.BINDVARS = CUST.DOM.bankId
+               sv_a = "acctAcid|Select acid from tbaadm.gam where schm_type in ('CAA','SBA','ODA')  "
+               sv_a = sv_a + " And del_flg='N' And entity_cre_flg ='Y' and bank_id='"+CUST.DOM.bankId+"' "
+               #sv_a = sv_a + " And del_flg='N' And Serv_chrg_coll_flg='N'  And entity_cre_flg ='Y' and bank_id='"+CUST.DOM.bankId+"' "
+               sv_a = sv_a + " And to_date(acct_opn_date,'dd-mm-yyyy') < to_date('"+CUST.DOM.BODDate+"','dd-mm-yyyy')-2 "
+               sv_a = sv_a + " And acid in (select acid from tbaadm.smt where acct_status = 'A' And bank_id='"+ CUST.DOM.bankId+"' "
+               sv_a = sv_a + " And to_date(ACCT_STATUS_DATE,'dd-mm-yyyy') between to_date('"+CUST.DOM.BODDate+"','dd-mm-yyyy')-2 "
+               sv_a = sv_a + " And to_date('"+CUST.DOM.BODDate+"','dd-mm-yyyy'))  union"
+               sv_a = sv_a + " Select acid from tbaadm.gam where schm_type in ('CAA','SBA','ODA')  "
+               sv_a = sv_a + " And del_flg='N' And entity_cre_flg ='Y' and bank_id='"+CUST.DOM.bankId+"' "
+               #sv_a = sv_a + " And del_flg='N' And Serv_chrg_coll_flg='N'  And entity_cre_flg ='Y' and bank_id='"+CUST.DOM.bankId+"' "
+               sv_a = sv_a + " And to_date(acct_opn_date,'dd-mm-yyyy') < to_date('"+CUST.DOM.BODDate+"','dd-mm-yyyy')-2 "
+               sv_a = sv_a + " And acid in (select acid from tbaadm.cam where acct_status = 'A' And bank_id='"+ CUST.DOM.bankId+"' "
+               sv_a = sv_a + " And ACCT_STATUS_DATE between to_date('"+CUST.DOM.BODDate+"','dd-mm-yyyy')-2 "
+               #sv_a = sv_a + " And to_date(ACCT_STATUS_DATE,'dd-mm-yyyy') between to_date('"+CUST.DOM.BODDate+"','dd-mm-yyyy')-2 "
+               sv_a = sv_a + " And to_date('"+CUST.DOM.BODDate+"','dd-mm-yyyy')) "
+               print(sv_a)
+
+               sv_s = urhk_dbCursorOpen(sv_a)
+               B2KTEMP.TEMPSTD.Cur = BANCS.OUTPARAM.DB_CURSOR_NUMBER
+               sv_z = urhk_dbCursorFetch(B2KTEMP.TEMPSTD.Cur)
+               print(sv_z)
+
+               if(sv_z != 0) then
+                  sv_b = "Record Retrieval failed Try Again later"
+                  print(sv_b)
+                  sv_a = urhk_SetOrbOut("SuccessOrFailure|N")
+                  GOTO FINISH
+               endif
+
+               while (sv_z == 0)
+                  CUST.DOM.acctAcid = BANCS.OUTPARAM.acctAcid
+
+#==Fetch All accounts Reactivated today
+                  #IF ((CUST.DOM.typeAcct == "SBA") OR (CUST.DOM.typeAcct == "CAA")) THEN
+               		#sv_a = "acidCnt|Select count(acid) from tbaadm where acid ='"+CUST.DOM.acctAcid+"' "
+               		#sv_a = sv_a + "  And to_date(acct_opn_date,'dd-mm-yyyy') < to_date(CUST.DOM.BODDate,'dd-mm-yyyy')-2 "
+                  #ENDIF
+                  #IF (CUST.DOM.typeAcct == "ODA") THEN
+               		#sv_a = "acidCnt|Select count(acid) from tbaadm where acid ='"+CUST.DOM.acctAcid+"' "
+               		#sv_a = sv_a + "  And to_date(acct_opn_date,'dd-mm-yyyy') < to_date(CUST.DOM.BODDate,'dd-mm-yyyy')-2 "
+                  #ENDIF
+                  #print(sv_a)
+                  #sv_s = urhk_dbSelect(sv_a)
+                  #IF (sv_s !="0") THEN
+                  #  GOTO FINISH 
+                  #Endif
+                  #CUST.DOM.acidCnt = BANCS.OUTPARAM.acidCnt
+                  #IF (CUST.DOM.acidCnt == 0) THEN
+                      #GOTO FINISH
+                  #ENDIF
+               	  sv_a = "stdate|Select acct_status_date from tbaadm.smt where acid ='" + CUST.DOM.acctAcid + "'  And bank_id='"+ CUST.DOM.bankId+"' union  "
+               	  sv_a = sv_a + "Select acct_status_date from tbaadm.cam where acid ='" + CUST.DOM.acctAcid + "'  And bank_id='"+ CUST.DOM.bankId+"'"
+                  print(sv_a)
+                  sv_s = urhk_dbSelect(sv_a)
+                  IF (sv_s !=0) THEN
+                    GOTO FINISH 
+                  Endif
+                  CUST.DOM.stdate=BANCS.OUTPARAM.stdate
+#===========================================
+# Update ELE table For all Eligible Accounts - Serv_chrg_coll_flg in tbaadm.gam
+#===========================================
+               	  sv_a = "entCnt|Select count(ENTITY_ID) from tbaadm.ele where ENTITY_ID ='" + CUST.DOM.acctAcid + "'  And bank_id='"+ CUST.DOM.bankId+"' "
+                  print(sv_a)
+                  sv_s = urhk_dbSelect(sv_a)
+                  IF (sv_s !=0) THEN
+                    GOTO FINISH 
+                  Endif
+               IF (BANCS.OUTPARAM.entCnt == 0) THEN
+                  sv_a = "INSERT into tbaadm.ele values('ACMNT','"+CUST.DOM.acctAcid+"','"+CUST.DOM.BODDate+"','"
+                  sv_a = sv_a + BANCS.STDIN.userId+"',sysdate,'"+BANCS.STDIN.userId+"',sysdate,0,'"+CUST.DOM.bankId+"')"
+                  print(sv_a)
+               ELSE
+                  BANCS.INPARAM.BINDVARS = CUST.DOM.BODDate  +"|"+  CUST.DOM.acctAcid +"|"+ CUST.DOM.bankId
+                  sv_a = "update tbaadm.ele set LAST_EXEC_DATE ='"+CUST.DOM.stdate+"' "
+                  sv_a = sv_a + " where entity_id='"+CUST.DOM.acctAcid+"'  And bank_id='"+CUST.DOM.bankId+"'"
+                  print(sv_a)
+               ENDIF
+                  sv_s = urhk_dbSQL(sv_a)
+                  print(sv_s)
+
+               if(sv_s != 0) then
+                 sv_a = urhk_SetOrbOut("SuccessOrFailure|N")
+                 GOTO NextRec
+               endif
+#===========================================
+# Reset Charge FLG to Y For Eligible Accounts - Serv_chrg_coll_flg in tbaadm.gam
+#============================================
+               BANCS.INPARAM.BINDVARS = CUST.DOM.acctAcid  +"|"+ CUST.DOM.bankId
+               sv_a = "update tbaadm.gam set Serv_chrg_coll_flg = 'Y' "
+               sv_a = sv_a + " where Serv_chrg_coll_flg='N' And acid =?SVAR and bank_id=?SVAR "
+               print(sv_a)
+               sv_s = urhk_dbSQLWithBind(sv_a)
+               print(sv_s)
+
+               if(sv_s != "0") then
+                 sv_a = urhk_SetOrbOut("SuccessOrFailure|N")
+                 GOTO NextRec
+               endif
+
+
+              NextRec:
+                sv_a = urhk_dbCursorFetch(B2KTEMP.TEMPSTD.Cur)
+                print(sv_a)
+
+                if (sv_a != 0) then
+                  Goto CLOSE
+                endif
+
+              #}
+              Do
+
+CLOSE:
+              sv_a = urhk_dbSQL("commit")
+              sv_c = urhk_dbCursorClose(B2KTEMP.TEMPSTD.Cur)
+
+FINISH:
+DELETECLASS("CUST","DOM")
+DELETEREP("CUST")
+
+exitscript
+trace off
+end-->

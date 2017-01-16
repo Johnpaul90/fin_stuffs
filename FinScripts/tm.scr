@@ -1,0 +1,63 @@
+<--START
+TRACE ON
+
+#===========================================================================================================
+# Creating Required Repository
+#===========================================================================================================
+IF (REPEXISTS("FBN")==0) THEN
+#{
+        CREATEREP("FBN")
+#}
+ENDIF
+
+#===========================================================================================================
+# Creating Required CLASS
+#===========================================================================================================
+IF (CLASSEXISTS("FBN","CUST")==0) THEN
+#{
+        CREATECLASS("FBN","CUST",5)
+#}
+ENDIF
+
+#===========================================================================================================
+# Checking for Initiating SolId and context sol
+#===========================================================================================================
+
+	sv_r = urhk_B2k_PrintRepos("BANCS")
+  	FBN.CUST.solId = BANCS.STDIN.mySolId
+    	print(FBN.CUST.solId)
+    	FBN.CUST.tranDate = BANCS.INPUT.tranDate
+   	print(FBN.CUST.tranDate)
+   	sv_a = BANCS.INPUT.tranId
+   	print(sv_a)
+	FBN.CUST.tranId = lpad (sv_a,9,' ')
+   	print (FBN.CUST.tranId)
+       	sv_b = "initSolId|select distinct(INIT_SOL_ID) from TBAADM.DTH where TRAN_DATE= to_date('"+FBN.CUST.tranDate+"','DD-MM-YYYY') and TRAN_ID = '"+FBN.CUST.tranId+"' and bank_id = '"+ BANCS.STDIN.contextBankId +"'"
+    	print(sv_b)									 
+    	sv_v = urhk_dbselect(sv_b)
+    	print(sv_v)
+
+	if (sv_v == 0) then
+	#{
+ 	   	print(BANCS.OUTPARAM.initSolId)
+     		print(FBN.CUST.solId)
+	#}	
+	else
+	#(
+		sv_s = urhk_SetOrbOut("flag|" + "S")
+        	BANCS.OUTPUT.errorMessage = " "
+		exitscript
+	#}
+	endif
+
+        if(BANCS.OUTPARAM.initSolId != FBN.CUST.solId ) then
+        	sv_s = urhk_SetOrbOut("flag|" + "F")
+        	BANCS.OUTPUT.errorMessage = "Only Inquiry is allowed on transactions belonging to other service outlet"
+        else
+		sv_s = urhk_SetOrbOut("flag|" + "S")
+        	BANCS.OUTPUT.errorMessage = " "
+        endif
+	print(BANCS.OUTPUT.errorMessage)
+exitscript
+TRACE OFF
+END-->

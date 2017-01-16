@@ -1,0 +1,61 @@
+<--START
+TRACE ON
+#---------------------------------------------------
+# Create the necessary repositories and classes
+#---------------------------------------------------
+IF (REPEXISTS("FBN") == 0 ) THEN
+#{
+	CREATEREP("FBN")
+#}
+ENDIF
+IF (CLASSEXISTS("FBN","COT") == 0) THEN
+#{
+	CREATECLASS("FBN","COT",5)
+#}
+ENDIF
+FBN.COT.boddate= mid$(BANCS.STDIN.BODDate,0,10)
+FBN.COT.bankId=BANCS.STDIN.contextBankId
+FBN.COT.vsol=BANCS.STDIN.mySolId
+print(BANCS.STDIN.userId)
+FBN.COT.msg = "Y"
+#-------------------------
+#Validating user Input
+#-------------------------
+FBN.COT.acctNum = BANCS.INPUT.acctId
+
+sv_q = "cntRec|select count(foracid) from custom.COTACCU_TBL Where foracid='"+FBN.COT.acctNum+"' "
+sv_q = sv_q + " And substr(to_char(to_date(ACCU_DATE,'dd-mm-yyyy'),'DD-MON-YY'),1,2)=substr(to_char(to_date('"+FBN.COT.boddate+"','dd-mm-yyyy'),'DD-MON-YY'),1,2)"
+sv_q = sv_q + " And CHRG_FLG = 'N'" 
+sv_q = sv_q + " And bank_id='"+BANCS.STDIN.contextBankId+"'"
+print(sv_q)
+sv_d = urhk_dbSelect(sv_q)
+print(sv_d)
+if (sv_d != "0") then
+  FBN.COT.msg = "Y"
+  Goto Finish
+endif
+if (BANCS.OUTPARAM.cntRec != "0") then
+  FBN.COT.msg = "Z"
+  Goto Finish
+else
+  FBN.COT.msg = "Y"
+  Goto Finish
+endif
+
+
+Finish:
+  print("---------------------------")
+  print(FBN.COT.msg)
+  #sv_u = urhk_SetOrbOut("result|"+FBN.COT.msg)
+  sv_u = urhk_SetOrbOut("fdbck|"+FBN.COT.msg)
+  if(sv_u==0)then
+  #{
+     print("Success")
+  #}
+  endif
+
+
+EXITSCRIPT
+trace off
+
+END-->

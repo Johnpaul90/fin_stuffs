@@ -1,0 +1,168 @@
+  <--START
+     
+	 TRACE ON
+	 #sv_r = urhk_MTTS_PopulateInputDetails("")
+     sv_t = "COT MONTHLY CHARGING "
+     MTT.TranDetails.TranDate="0"
+     MTT.TranDetails.TranType="T"
+     MTT.TranDetails.TranSubType="BI"
+     MTT.TranDetails.Consolidate="N"
+     MTT.TranDetails.IgnoreExcp = "I"
+     sv_r = urhk_MTTS_DefineTransaction(sv_t)
+
+
+    IF (REPEXISTS("COT") == 0) THEN
+    #{ 
+        CREATEREP("COT")
+    #} 
+    ENDIF  
+
+    IF (CLASSEXISTS("COT", "COL") == 0) THEN
+    #{
+        CREATECLASS("COT","COL",5) 
+    #}
+    ENDIF 
+	
+	
+	#COT.COL.SOL = MTT.InputDetails.Argument1
+	#COT.COL.BANK =  MTT.InputDetails.Argument2
+	
+	
+	
+	#GET VAT ACCOUNT
+	COT.COL.FORAVAT = "20033104000404"
+	
+	#GET BANK CHARGES ACCOUNT
+	COT.COL.FORACHRG = "20055093000704"
+	
+	
+	
+    #MONTH 	
+	sv_g = "tran_BLM | select CUSTOM.endMonth_06  from dual"
+	sv_u = urhk_dbSelectWithBind(sv_g)
+	COT.COL.TRANBLM = BANCS.OUTPARAM.tran_BLM
+	
+	COT.COL.BD = MID$(COT.COL.TRANBLM, 0, 3)
+	COT.COL.LD = MID$(COT.COL.TRANBLM, 3, 6)
+	COT.COL.MM = MID$(COT.COL.TRANBLM, 6, 8)
+	
+	
+	COT.COL.BODL = MID$(BANCS.STDIN.BODDate,0,3)
+	COT.COL.BODM = MID$(BANCS.STDIN.BODDate,3,6)
+	COT.COL.BODYY = MID$(BANCS.STDIN.BODDate,6,4)
+	
+	
+	
+	#DETERMINE IF ITS END OF MONTH TO PROCEED
+	IF ((COT.COL.MM != COT.COL.BODM  ) AND (COT.COL.LD != COT.COL.BODL )) THEN
+	#{
+	EXITSCRIPT
+	#}
+	ELSE
+	
+	sv_i = ('"+COT.COL.BD+"'-'"+ COT.COL.BODM+"'-''"+COT.COL.BODYY+"')
+	sv_j = ('"+COT.COL.LD+"'-'"+COT.COL.BODM+"'-''"+COT.COL.BODYY+"')
+	
+	sv_k = " foracid, tranAMT  | select foracid, SUM(TRAN_AMT) from CUSTOM.COT_CHRG_TBL"
+	sv_k = sv_k + " where TRAN_DATE >='to_date(sv_i, 'dd-mm-yyyy')' and TRAN_DATE <= 'to_date(sv_j, 'dd-mm-yyyy')' "
+	PRINT(sv_k)
+	sv_e = urhk_dbCursorOpen(sv_k)
+	
+	IF (sv_e != 0) THEN
+	#{
+		EXITSCRIPT
+	#}
+	ELSE
+	
+	sv_f = BANCS.OUTPARAM.DB_CURSOR_NUMBER
+	sv_g = urhk_cursorFetch(sv_f)
+	
+	
+	    WHILE( sv_g == 0)
+		
+		
+		COT.COL.AMT = BANCS.OUTPARAM.tranAMT
+		PRINT(COT.COL.AMT)
+		sv_b = COT.COL.AMT 
+		COT.COL.FORACID = BANCS.OUTPARAM.foracid
+		PRINT(COT.COL.FORACID)
+		COT.COL.VAT = CDOUBLE(COT.COL.AMT*5)/100
+		PRINT(COT.COL.VAT)
+		sv_c = COT.COL.VAT
+		sv_h = "APPLIED COT CHARGE"
+		COT.COL.acctCrncyCode = "GMB"
+		
+		
+		#DEBIT THE ACCOUNT FOR COT
+		MTT.PartTranDetails.RefAmount  = -1 * sv_b
+        print(MTT.PartTranDetails.RefAmount)
+        MTT.PartTranDetails.Account= COT.COL.FORACID
+        MTT.PartTranDetails.ValueDate="0"
+        MTT.PartTranDetails.RefCurrency = COT.COL.acctCrncyCode
+        MTT.PartTranDetails.Consolidate="N"
+        MTT.PartTranDetails.Particulars=sv_h
+        MTT.PartTranDetails.TranIdentifier=sv_t
+        MTT.PartTranDetails.PTranBusinessType=""
+        sv_r = urhk_MTTS_DefinePartTran("COT1")
+        print(sv_r)
+		
+		
+        #DEBIT THE ACCOUNT FOR VAT
+        MTT.PartTranDetails.RefAmount  = -1 * sv_c
+        print(MTT.PartTranDetails.RefAmount)
+        MTT.PartTranDetails.Account= COT.COL.FORACID
+        MTT.PartTranDetails.ValueDate="0"
+        MTT.PartTranDetails.RefCurrency = COT.COL.acctCrncyCode
+        MTT.PartTranDetails.Consolidate="N"
+        MTT.PartTranDetails.Particulars=sv_h
+        MTT.PartTranDetails.TranIdentifier=sv_t
+        MTT.PartTranDetails.PTranBusinessType=""
+        sv_r = urhk_MTTS_DefinePartTran("COT2")
+        print(sv_r)
+		
+		
+		
+		
+		#CREDIT LEG
+        MTT.PartTranDetails.RefAmount = sv_b
+        print(MTT.PartTranDetails.RefAmount)
+        MTT.PartTranDetails.Account= COT.COL.FORACHRG
+        #MTT.PartTranDetails.RateCode="NOR"
+        MTT.PartTranDetails.ValueDate="0"
+        MTT.PartTranDetails.RefCurrency = COT.COL.acctCrncyCode
+        MTT.PartTranDetails.Consolidate="N"
+        MTT.PartTranDetails.Particulars=sv_h
+        MTT.PartTranDetails.TranIdentifier=sv_t
+        MTT.PartTranDetails.PTranBusinessType=""
+        sv_h = urhk_MTTS_DefinePartTran("COT3")
+        print(sv_h)
+
+
+       #VAT CREDIT LEG 
+       MTT.PartTranDetails.RefAmount = sv_g
+       print(MTT.PartTranDetails.RefAmount)
+       MTT.PartTranDetails.Account= COT.COL.FORAVAT
+      #MTT.PartTranDetails.RateCode="NOR"
+       MTT.PartTranDetails.ValueDate="0"
+       MTT.PartTranDetails.RefCurrency = COT.COL.acctCrncyCode
+       MTT.PartTranDetails.Consolidate="N"
+       MTT.PartTranDetails.Particulars=sv_h
+       MTT.PartTranDetails.TranIdentifier=sv_t
+       MTT.PartTranDetails.PTranBusinessType=""
+       sv_h = urhk_MTTS_DefinePartTran("COT4")
+       print(sv_h)
+
+       sv_p = urhk_MTTS_EndDefinition("")
+       print(sv_r)
+	   
+	   
+	   DO
+	  sv_x = urhk_cursorClose(sv_f)
+	  PRINT(sv_x)
+	
+	  ENDIF
+		
+		
+		TRACE OFF
+
+END-->

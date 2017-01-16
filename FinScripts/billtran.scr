@@ -1,0 +1,62 @@
+<--start
+trace on
+#---------------------------------------------------
+# Create the necessary repositories and classes
+#---------------------------------------------------
+
+IF (REPEXISTS("BILLTRAN") == 0 ) THEN
+#{
+    CREATEREP("BILLTRAN")
+#}
+ENDIF
+
+
+IF (CLASSEXISTS("BILLTRAN","DATA") == 0) THEN
+#{
+    CREATECLASS("BILLTRAN","DATA",5)
+#}
+ENDIF
+print(BANCS.INPUT.remitType)
+BILLTRAN.DATA.bankId = BANCS.STDIN.contextBankId
+print(BILLTRAN.DATA.bankId) 
+#sv_a = "remitType|select to_char(?SVAR) from dual"
+#BANCS.INPARAM.BINDVARS = BANCS.INPUT..remitType
+#sv_d = urhk_dbSelectWithBind(sv_a)
+#BILLTRAN.DATA.remitType=getstring(BILLTRAN.DATA.remitType)
+#print(BILLTRAN.DATA.remitType)
+#---------Fetching the tran ID for the bill type--------------
+BANCS.INPARAM.BINDVARS =BANCS.INPUT.remitType
+print(BANCS.INPARAM.BINDVARS)
+
+BILLTRAN.DATA.remitType = trim(BANCS.INPUT.remitType)
+print(BILLTRAN.DATA.remitType)
+sv_a = "tranId|select tran_id from tbaadm.fbh where  bill_id ='"+BILLTRAN.DATA.remitType+"'and entity_cre_flg='Y' and bill_func ='R' and bank_id = '"+ BILLTRAN.DATA.bankId +"' and rownum=1"
+print(sv_a)
+
+#sv_d = urhk_dbSelectWithBind(sv_a)
+sv_d = urhk_dbSelect(sv_a)
+print(sv_d)
+
+IF (sv_d ==0) THEN
+#{
+	BILLTRAN.DATA.tranId=BANCS.OUTPARAM.tranId
+	print(BILLTRAN.DATA.tranId)
+    sv_z = urhk_SetOrbOut("SuccessOrFailure|Y")
+    print(sv_z)
+    sv_i = "tranId|"+ BILLTRAN.DATA.tranId
+    PRINT(sv_i)
+    sv_j = urhk_SetOrbOut(sv_i)
+	print(sv_j)
+	
+#}
+ELSE
+#{
+	print("Unable to get the tran ID")
+
+#}
+
+ENDIF
+
+trace off
+end-->
+

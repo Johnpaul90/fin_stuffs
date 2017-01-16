@@ -1,0 +1,142 @@
+<--start
+trace on
+#-----------------------------------------------------------------
+# Script name           : accttStatusVal.scr
+# Author                : Akinola Omowunmi
+# Date                  : 21/10/2014
+# Desc                  : This script is called to validate accounts.
+# Called by				: jsp file
+# Associated Objects    : 
+# Bank                  : FBN CONGO
+# Flow of Script        : 
+#------------------------------------------------------------------
+
+sv_r = urhk_B2k_PrintRepos("BANCS")
+
+IF (REPEXISTS("CUST") == 0) THEN
+	CREATEREP("CUST")
+ENDIF
+
+IF (CLASSEXISTS("CUST", "STAT") == 0) THEN
+     CREATECLASS("CUST", "STAT", 5)
+ENDIF
+
+
+if (BANCS.STDIN.languageCode == "INFENG") then
+	CUST.STAT.ERR000001 = "OFFICE ACCOUNT NOT ALLOWED FOR TRANSACTION"
+	CUST.STAT.ERR000002 = "FROZEN ACCOUNT NOT ALLOWED FOR TRANSACTION"
+	CUST.STAT.ERR000003 = "DORMANT ACCOUNT NOT ALLOWED FOR TRANSACTION"
+	CUST.STAT.ERR000004 = "ACCOUNT DOESNOT BELONG TO CUSTOMER"
+	CUST.STAT.ERR000005 = "ACCOUNT belongs to staff"
+
+endif
+if (BANCS.STDIN.languageCode == "FRENCH") then
+	CUST.STAT.ERR000001 = "COMPTES INTERNES NON AUTORISE POUR CETTE OPERATION"
+	CUST.STAT.ERR000002 = "COMPTES BLOQUES NON AUTORISES POUR CETTE OPERATION"
+	CUST.STAT.ERR000003 = "DCOMPTE DORMANT NON AUTORISE POUR CETTE OPERATION"
+	CUST.STAT.ERR000004 = "COMPTE NE APPARTIENT AU CLIENT"
+
+endif
+
+	
+CUST.STAT.acctNum = BANCS.INPUT.acctNum
+print(CUST.STAT.acctNum)
+IF (FIELDEXISTS(BANCS.INPUT.cifID)) THEN
+    CUST.STAT.cifID = BANCS.INPUT.cifID
+	print(CUST.STAT.cifID)
+ELSE
+	CUST.STAT.cifID = ""
+endif
+CUST.STAT.mySolId = BANCS.STDIN.mySolId
+print(CUST.STAT.mySolId)
+CUST.STAT.bankId = BANCS.STDIN.contextBankId
+print(CUST.STAT.bankId) 
+
+if (CUST.STAT.acctNum !="") then
+	sv_x = urhk_getAcctDetailsInRepository(CUST.STAT.acctNum)
+	print(sv_x)
+	if (sv_x == 0) then
+		CUST.STAT.schmType = BANCS.OUTPARAM.schmType
+		print(CUST.STAT.schmType)
+		CUST.STAT.schmCode = BANCS.OUTPARAM.schmCode
+		print(CUST.STAT.schmCode)
+		CUST.STAT.acctOwnerShip = BANCS.OUTPARAM.acctOwnerShip
+		print(CUST.STAT.acctOwnerShip)
+		CUST.STAT.freezeCode = BANCS.OUTPARAM.freezeCode
+		print(CUST.STAT.freezeCode)
+		
+		sv_a = "cifId|select cif_id from tbaadm.gam where acid=(select acid from gam where foracid='" +CUST.STAT.acctNum+ "') and bank_id = '"+ CUST.STAT.bankId +"'"
+        print(sv_a)
+        sv_r = urhk_dbSelect(sv_a)
+        print(sv_r)
+        if (sv_r == 0) then
+			CUST.STAT.cifId = BANCS.OUTPARAM.cifId
+			print(CUST.STAT.cifId)
+        endif
+		
+	endif
+	
+	if (CUST.STAT.acctOwnerShip == "O") then
+		sv_a = urhk_setOrbOut("result|" + "F")
+		sv_a = urhk_setOrbOut("msg|" + CUST.STAT.ERR000001)
+		print(sv_a)
+		exitscript
+	endif
+	if (CUST.STAT.acctOwnerShip == "E") then
+		sv_a = urhk_setOrbOut("result|" + "F")
+		sv_a = urhk_setOrbOut("msg|" + CUST.STAT.ERR000005)
+		print(sv_a)
+		exitscript
+	endif
+	if (CUST.STAT.cifID != "") then
+		if (CUST.STAT.cifId != CUST.STAT.cifID) then
+			sv_a = urhk_setOrbOut("result|" + "F")
+			sv_a = urhk_setOrbOut("msg|" + CUST.STAT.ERR000004)
+			print(sv_a)
+			exitscript
+		endif
+	endif
+	
+	if ((CUST.STAT.freezeCode == "D") or  (CUST.STAT.freezeCode == "T") )then
+		sv_a = urhk_setOrbOut("result|" + "F")
+		sv_a = urhk_setOrbOut("msg|" + CUST.STAT.ERR000002)
+		print(sv_a)
+		exitscript
+	endif
+	
+	print(CUST.STAT.acctNum)
+	if (CUST.STAT.schmType == "ODA") then
+        sv_a = "DomStat|select acct_status from cam where acid=(select acid from gam where foracid='" +CUST.STAT.acctNum+ "') and bank_id = '"+ CUST.STAT.bankId +"'"
+        print(sv_a)
+        sv_r = urhk_dbSelect(sv_a)
+        print(sv_r)
+        if (sv_r == 0) then
+			CUST.STAT.DomStat = BANCS.OUTPARAM.DomStat
+        endif
+    else
+        sv_a = "DomStat|select acct_status from smt where acid=(select acid from gam where foracid='" + CUST.STAT.acctNum+ "') and bank_id = '"+ CUST.STAT.bankId +"'"
+        print(sv_a)
+        sv_r = urhk_dbSelect(sv_a)
+        print(sv_r)
+        if (sv_r == 0) then
+			CUST.STAT.DomStat = BANCS.OUTPARAM.DomStat
+        endif
+    endif
+	
+	print(CUST.STAT.DomStat)
+	if (CUST.STAT.DomStat == "D" ) then
+		sv_a = urhk_setOrbOut("result|" + "F")
+		sv_a = urhk_setOrbOut("msg|" + 	CUST.STAT.ERR000003)
+		print(sv_a)
+		exitscript
+	endif
+	
+	sv_a = urhk_setOrbOut("result|" + "S")
+	sv_a = urhk_setOrbOut("msg|" + ".")				
+endif
+
+exitscript
+
+trace off
+
+end-->

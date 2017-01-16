@@ -1,0 +1,51 @@
+#----------------------------------------------------------------------------
+# Script Name       : valSolId.scr
+# Author            : Abhishek Sawant
+# Date              : 11-05-2009
+# Desc              : To validate sol id entered. 
+# Called Scripts    :
+# Calling Scripts   :
+# Menu Option       : UCODCM/CODCM/CIDCM
+#---------------------------------------------------------------------------
+<--start
+trace on
+
+IF (REPEXISTS("CUST") == 0) THEN
+#{
+	CREATEREP("CUST")
+#}
+ENDIF
+
+IF (CLASSEXISTS("CUST", "ODCM") == 0) THEN
+#{
+	CREATECLASS("CUST", "ODCM", 5)
+#}
+ENDIF
+
+# Value of the sol Id from the frontend. 
+CUST.ODCM.solId = BANCS.INPUT.solId
+print(CUST.ODCM.solId)
+
+sv_u = urhk_B2k_valSolId(CUST.ODCM.solId)
+print(sv_u)
+print(sv_u)
+if(sv_u == 0) then
+sv_r = urhk_SetOrbOut("count|0")
+else
+sv_r = urhk_SetOrbOut("count|1" )
+endif
+
+
+#-----------------------------------------------------------------------------------
+# FINISH
+#-----------------------------------------------------------------------------------
+
+FINISH:
+
+DELETECLASS("CUST", "ODCM")
+DELETEREP("CUST")
+
+EXITSCRIPT
+
+trace off
+end-->

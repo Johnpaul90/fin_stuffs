@@ -1,0 +1,269 @@
+<--start
+	trace on
+	
+	###==================GHANA PROJECT CHEQUE CONFIRMATION ===========###
+	sv_a = urhk_b2k_PrintRepos("BANCS")
+	BANCS.OUTPUT.ErrorDesc=""
+	BANCS.OUTPUT.AddtlDetails=""
+	BANCS.OUTPUT.DeleteUAD=""
+	###################################################################
+	###################################################################
+	# This Code segment handles Cheque Confirmation Requests
+	###################################################################
+	###################################################################
+	print(BANCS.INPUT.Event)
+	print(BANCS.INPUT.DrCrInd)
+	#print(BANCS.INPUT.TranType)
+	#print(BANCS.INPUT.SchemeType)
+	
+	if (BANCS.INPUT.DrCrInd == "C") then
+		if (BANCS.INPUT.SchemeType == "DDA")  then
+		  if (BANCS.STDIN.mySolId != BANCS.INPUT.AcctSolId) then
+			BANCS.INPARAM.ValMode = BANCS.INPUT.ValMode
+			BANCS.INPARAM.DrCrInd = BANCS.INPUT.DrCrInd
+			print(BANCS.INPUT.ExceptionIgnoreFlg)
+			BANCS.INPARAM.ExceptionIgnoreFlg = BANCS.INPUT.ExceptionIgnoreFlg
+			sv_d = urhk_FTS_RaiseException("TA2")
+		  endif
+		endif
+	endif
+
+ #if (BANCS.INPUT.Event == "TM_ENTRY") then
+ if (BANCS.INPUT.Event == "TM_REQ_POST_EVENT") then
+ 
+    if ((BANCS.INPUT.DrCrInd == "D") AND (BANCS.INPUT.TranType == "T")) then
+
+          if (BANCS.INPUT.SchemeCode != "SA303") then
+             Goto STEP999 
+          endif 
+          #if ((BANCS.INPUT.TranParticulars == "Charge on Withdrawal:SA303") OR (BANCS.INPUT.TranParticulars =="VAT on Withdrawal:SA303") ) then
+          if ((BANCS.INPUT.TranRemarks == "SA303_CHARGE") OR (BANCS.INPUT.TranRemarks =="SA303_CHARGE") ) then
+             Goto STEP999 
+          endif 
+#---------------------------------------------------
+# Create the necessary repositories and classes
+#---------------------------------------------------
+
+		IF (REPEXISTS("FBN") == 0 ) THEN
+		#{
+        		CREATEREP("FBN")
+		#}
+		ENDIF
+		IF (CLASSEXISTS("FBN","GMB") == 0) THEN
+		#{
+        		CREATECLASS("FBN","GMB",5)
+		#}
+		ENDIF
+
+		print(BANCS.STDIN.userId)
+		#FBN.GMB.msg = "Y"
+		#-------------------------
+		#Validating user Input
+		#-------------------------
+		FBN.GMB.acctNum = BANCS.INPUT.AcctNum
+		FBN.GMB.refAmt = CDOUBLE(BANCS.INPUT.TranAmt)
+		FBN.GMB.ccy = BANCS.INPUT.TranCurrency
+		print(FBN.GMB.ccy)
+		print(FBN.GMB.refAmt)
+		print(FBN.GMB.acctNum)
+		print(BANCS.INPUT.TranParticulars)
+
+		sv_q = "cntRec|select count(schm_code) from tbaadm.gam where foracid='"+BANCS.INPUT.AcctNum+"' "
+		sv_q = sv_q + " and schm_code ='SA303' and bank_id='"+BANCS.STDIN.contextBankId+"'"
+		print(sv_q)
+		sv_d = urhk_dbSelect(sv_q)
+		print(sv_d)
+		if (sv_d != "0") then
+  		    #FBN.GMB.msg = "Z/No_Charge/"
+  		    Goto STEP999
+		endif
+		if (BANCS.OUTPARAM.cntRec == "0") then
+  		   #FBN.GMB.msg = "Z/No_Charge/"
+  		   Goto STEP999
+		endif
+
+		sv_q = "minBal|select ACCT_MIN_BALANCE from tbaadm.csp where bank_id='"+BANCS.STDIN.contextBankId+"' and schm_code in "
+		sv_q = sv_q + " (select schm_code from tbaadm.gam where foracid='"+BANCS.INPUT.AcctNum+"' "
+		sv_q = sv_q + " and del_flg='N' and entity_cre_flg='Y' and bank_id='"+BANCS.STDIN.contextBankId+"') "
+		print(sv_q)
+		sv_d = urhk_dbSelect(sv_q)
+		print(sv_d)
+		if (sv_d == 0) then
+  		   FBN.GMB.minBal = CDOUBLE(BANCS.OUTPARAM.minBal)
+  		   print(FBN.GMB.minBal)
+		else
+  		   #FBN.GMB.msg = "Z/No_Charge/"
+  		   Goto STEP999
+		endif
+#-------------------------------
+#Get Effective Available Balance
+#-------------------------------
+		sv_r = urhk_getAcctDetailsInRepository(FBN.GMB.acctNum)
+		print(sv_r)
+		if (sv_r == 0) then
+   		   FBN.GMB.availBal = BANCS.OUTPARAM.EffAvailableAmt
+   		   print(FBN.GMB.availBal)
+		else
+   		   #FBN.GMB.msg = "Z/No_Charge/"
+   		   Goto STEP999
+		endif
+
+#Check if the withdrawal amt will take
+#effAvailable Balance lower than minBal of Acct Scheme
+
+		#FBN.GMB.balAmt = CDOUBLE(FBN.GMB.availBal) - CDOUBLE(FBN.GMB.refAmt)
+		FBN.GMB.balAmt = CDOUBLE(FBN.GMB.availBal) - CDOUBLE(BANCS.INPUT.TranAmt)
+		print(CDOUBLE(FBN.GMB.balAmt))
+		print(CDOUBLE(FBN.GMB.minBal))
+
+		IF(CDOUBLE(FBN.GMB.minBal) > CDOUBLE(FBN.GMB.balAmt) ) THEN
+		#{
+  		   Goto Apply
+		Else
+  		   #FBN.GMB.msg = "Z/No_Charge/"
+  		   Goto STEP999
+		Endif
+
+
+Apply:
+#--Check to ensure that TrxnAmt + Charge Applied + Vat of Applied Charge < EffAvailable Amt
+
+#--Retrieve PTTM Percentage VAT Amount
+	    sv_s = "fvat|Select a.AMT_PCNT from tbaadm.ptt p,tbaadm.adm a "
+   		sv_s = sv_s + " where p.AMT_DERV_SRL_NUM =a.AMT_DRV_SRL_NUM "
+   		sv_s = sv_s + " And   event_type='LNKED' "
+   		sv_s = sv_s + " And   p.event_id ='VALUE_ADDED_TAX' "
+   		sv_s = sv_s + " And   a.bank_id ='" + BANCS.STDIN.contextBankId + "' "
+   		sv_s = sv_s + " And   p.bank_id ='" + BANCS.STDIN.contextBankId + "' "
+   		print(sv_s)
+   		sv_d = urhk_dbSelect(sv_s)
+   		if (sv_d != "0") then
+   		#{
+      		    #FBN.GMB.msg = "Y/VAT_Amount_Not_Set/"
+      		    Goto STEP999
+   		#}
+   		endif
+   		FBN.GMB.fvat = BANCS.OUTPARAM.fvat
+   		print(FBN.GMB.fvat)
+
+#--Retrieve PTTM Fixed Charge Amount
+   		sv_s = "fchrg|Select a.FIXED_AMT from tbaadm.ptt p,tbaadm.adm a "
+   		sv_s = sv_s + " where p.AMT_DERV_SRL_NUM =a.AMT_DRV_SRL_NUM "
+   		sv_s = sv_s + " And   event_type='TRANF' "
+   		sv_s = sv_s + " And   p.event_id ='MIN_BAL_CHRG' "
+   		sv_s = sv_s + " And   a.bank_id ='" + BANCS.STDIN.contextBankId + "' "
+   		sv_s = sv_s + " And   p.bank_id ='" + BANCS.STDIN.contextBankId + "' "
+   		print(sv_s)
+   		sv_d = urhk_dbSelect(sv_s)
+   		if (sv_d != "0") then
+   		#{
+      		    FBN.GMB.fchrg = "50.00"
+      		    Goto STEP999
+   		#}
+   		endif
+   		FBN.GMB.fchrg = BANCS.OUTPARAM.fchrg
+   		print(FBN.GMB.fchrg)
+
+#-- VAT calculation and Total Amount to charge customer account
+
+   		sv_v = CDOUBLE(FBN.GMB.fvat)/100
+   		print(sv_v)
+   		FBN.GMB.vat = CDOUBLE(FBN.GMB.fchrg) * sv_v
+   		print(FBN.GMB.vat)
+   		#FBN.GMB.vtotal = CDOUBLE(FBN.GMB.refAmt) + CDOUBLE(FBN.GMB.fchrg) + CDOUBLE(FBN.GMB.vat)
+   		FBN.GMB.vtotal = CDOUBLE(BANCS.INPUT.TranAmt) + CDOUBLE(FBN.GMB.fchrg) + CDOUBLE(FBN.GMB.vat)
+   		print(FBN.GMB.vtotal)
+   		print(FBN.GMB.availBal)
+
+#--Check if Total Charge Amt to be Applied is > EffAvailable Balance
+		IF (CDOUBLE(FBN.GMB.availBal) < FBN.GMB.vtotal ) THEN
+		#{
+     		    BANCS.OUTPUT.successOrFailure = "F"
+                    BANCS.OUTPUT.ErrorDesc = "Error: Insufficient Balance==>Charge_Amount:"+FBN.GMB.fchrg+"/VAT_Amount:"+FBN.GMB.vat
+  		    Goto STEP999
+                #}
+		Else
+		#{
+  		    #FBN.GMB.msg = "Y/Charge_Amount:"+FBN.GMB.fchrg+"_GMD/VAT_Amount:"+FBN.GMB.vat
+                    #BANCS.OUTPUT.TranParticulars = BANCS.INPUT.TranParticulars +"^Chrg^" 
+
+                    print(FBN.GMB.acctNum) 
+                    print(FBN.GMB.fchrg) 
+                    FBN.GMB.crncy = BANCS.INPUT.TranCurrency
+                    print(FBN.GMB.crncy)
+                    print(FBN.GMB.vat)
+#Charging should happen
+                    Print("Charging Transaction")
+		    Goto STEP999
+                #}
+		Endif
+
+
+      endif
+ Endif
+#=====End of SBA Charge ====
+	
+	# if (BANCS.INPUT.Event == "TM_REQ_POST_EVENT")  then
+	#	#if (BANCS.INPUT.Event == "TM_ENTRY") then
+	#	if ((BANCS.STDIN.userId != "CDCI")  and  (BANCS.STDIN.userId != "SYSTEM") and ( ( BANCS.INPUT.SchemeType =="ODA") OR (BANCS.INPUT.SchemeType =="CAA") )  and  (BANCS.INPUT.TranCurrency =="XOF" ) ) then
+	#		if ( (BANCS.INPUT.TranSubType == "NP") or (BANCS.INPUT.TranSubType == "NR") or (BANCS.INPUT.TranSubType == "BI") or (BANCS.INPUT.TranSubType == "I")) then
+	#			if((BANCS.INPUT.DrCrInd =="D") and (BANCS.INPUT.InstrumentType=="CHQ")) then
+	#				print("Here")
+	#				sv_a = REPEXISTS("STDWFS")
+	#				if(sv_a == 0) then
+	#					CREATEREP("STDWFS")
+	#				Endif
+	#				sv_a = CLASSEXISTS("STDWFS", "GLBDATA")
+	#				if (sv_a == 0 ) Then
+	#					CREATECLASS("STDWFS", "GLBDATA", 5)
+	#				endif
+	#				sv_d = ""
+	#				sv_d = sv_d + "c1|SELECT acid FROM tbaadm.GAM WHERE foracid='"+BANCS.INPUT.AcctNum+"'"
+	#				sv_d = sv_d + " and Bank_Id = '"+ BANCS.STDIN.contextBankId + "'"
+	#				sv_w = urhk_dbSelect(sv_d)
+	#				if (sv_w != "0") then
+	#					GOTO STEP999
+	#				endif
+	#				sv_d = "nAcctNo,nlimit|select foracid, limit from custom.CHQ_CONFIRM_SETUP_TBL"
+	#				sv_d = sv_d + " WHERE foracid='"+BANCS.INPUT.AcctNum+"' and concat(verify_flg,del_flg) in ('YN','NP') and Bank_Id = '"+ BANCS.STDIN.contextBankId + "'  "
+	#				sv_w = urhk_dbSelect(sv_d)
+	#				if (sv_w == "0") then
+	#					STDWFS.GLBDATA.limit = BANCS.OUTPARAM.nlimit
+	#				else
+	#					sv_a = "nlimit|select decode( '" + BANCS.INPUT.TranType + "' ,'C',BNK_CASH_LIM,'T',BNK_TRANSFER_LIM,'L',BNK_CLEARING_LIM) from custom.BANK_LIM_TBL where Bank_Id = '"+ BANCS.STDIN.contextBankId + "' "
+	#					sv_w = urhk_dbSelect(sv_a)
+	#					if (sv_w == "0") then
+	#						STDWFS.GLBDATA.limit = BANCS.OUTPARAM.nlimit
+	#						print(STDWFS.GLBDATA.limit)
+	#					endif
+	#				endif
+	#				if (CDOUBLE(STDWFS.GLBDATA.limit) < CDOUBLE(BANCS.INPUT.TranAmt)) then
+	#					sv_d = "c1,c2,c3,c4,c5,c6,c7,c8,c9|SELECT FORACID, INSTRMNT_NO, BENEFICIARY, AMOUNT, INSTRMNT_DATE,ID_CARD, PAID_FLG,pay_channel,channel FROM custom.CHQ_CONFIRM_DET_TBL"
+	#					sv_d = sv_d + " WHERE foracid='"+BANCS.INPUT.AcctNum+"'"
+	#					sv_d = sv_d + " and INSTRMNT_NO =to_number('"+ BANCS.INPUT.InstrumentNum +"')"
+	#					sv_d = sv_d + " and ((AMOUNT= '"+ BANCS.INPUT.TranAmt + "'and channel not in ('O','R') ) or channel='O') "
+	#					sv_d = sv_d + " and verify_flg = 'Y' and del_flg !='Y' and required_confirm = 'N'"
+	#					sv_d = sv_d + " and Bank_Id = '"+ BANCS.STDIN.contextBankId + "'"
+	#					sv_w = urhk_dbSelect(sv_d)
+	#					print(sv_w)
+	#					if (sv_w == "1") then
+	#						sv_d = "CR1"
+	#						BANCS.INPARAM.ValMode = BANCS.INPUT.ValMode
+	#						BANCS.INPARAM.DrCrInd = BANCS.INPUT.DrCrInd
+	#						BANCS.INPARAM.ExceptionIgnoreFlg = BANCS.INPUT.ExceptionIgnoreFlg
+	#						sv_r=urhk_FTS_RaiseException(sv_d)
+	#						print(sv_r)
+	#					endif
+	#				endif
+	#			endif
+	#		endif
+	#	Endif
+	#Endif
+	###################################################################
+	# Cheque Confirmation Request Stops here
+	###################################################################
+	STEP999:
+		
+		exitscript
+		trace off
+end-->

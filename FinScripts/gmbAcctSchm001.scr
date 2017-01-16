@@ -1,0 +1,61 @@
+<--START
+TRACE ON
+
+#---------------------------------------------------
+# Create the necessary repositories and classes
+#---------------------------------------------------
+
+IF (REPEXISTS("FBN") == 0 ) THEN
+#{
+	CREATEREP("FBN")
+#}
+ENDIF
+
+
+IF (CLASSEXISTS("FBN","GMB") == 0) THEN
+#{
+	CREATECLASS("FBN","GMB",5)
+#}
+ENDIF
+
+print(BANCS.STDIN.userId)
+#-------------------------
+#Validating user Input
+#-------------------------
+FBN.GMB.acctNum = BANCS.INPUT.acctNum
+print(FBN.GMB.acctNum)
+
+sv_q = "schmCnt|select count(schm_code) from tbaadm.gam where foracid='"+FBN.GMB.acctNum+"' "
+sv_q = sv_q + " And bank_id='"+BANCS.STDIN.contextBankId+"'"
+sv_q = sv_q + " And schm_code='SA303' "
+print(sv_q)
+sv_d = urhk_dbSelect(sv_q)
+print(sv_d)
+if (sv_d != "0") then
+  FBN.GMB.vcnt = "B"
+  Goto Finish
+endif
+FBN.GMB.schmCnt = BANCS.OUTPARAM.schmCnt 
+
+IF(FBN.GMB.schmCnt != "1") Then
+  FBN.GMB.vcnt = "B"
+ELSE
+  FBN.GMB.vcnt = "Q"
+ENDIF
+
+
+
+Finish:
+
+  sv_u = urhk_SetOrbOut("vschm|"+FBN.GMB.vcnt)
+  if(sv_u==0)then
+  #{
+     print("Success")
+  #}
+  endif
+
+
+EXITSCRIPT
+trace off
+
+END-->

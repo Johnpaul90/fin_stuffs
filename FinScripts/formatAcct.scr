@@ -1,0 +1,54 @@
+#----------------------------------------------------------------------------
+# Script Name       : formatAcct.scr
+# Author            : ANSHUL JAIN
+# Date              : 25-03-2002
+# Desc              : Change Of Account Number Format
+# Called By         :
+# Bank              : FBN
+# Menu Option       : 
+#----------------------------------------------------------------------------
+<--start
+trace on
+ sv_a = BANCS.INPUT.uAccount
+BANCS.OUTPUT.fAccount = sv_a
+ print(BANCS.OUTPUT.fAccount)
+
+	sv_q="foracid|select foracid from tbaadm.gam "
+	sv_q=sv_q + " where foracid ='" + BANCS.INPUT.uAccount + "'"
+	 print(sv_q)
+	sv_w=urhk_dbSelect(sv_q)
+	 print(sv_w)
+	if  (sv_w == 0)  then
+		BANCS.OUTPUT.fAccount = BANCS.INPUT.uAccount
+	else
+		sv_q="finacle_acct_num|select finacle_acct_num from custom.fbn_am "  
+		sv_q=sv_q + " where OLD_ACCT_NUM ='" + BANCS.INPUT.uAccount + "' and bank_id = '"+ BANCS.STDIN.contextBankId +"' " 
+	       #sv_q = sv_q + " and (substr(finacle_acct_num,1,3) = '" + BANCS.STDIN.mySolId + "'"
+	       #sv_q = sv_q + " or ( substr(old_acct_num,1,3) in ('141','999') and   substr(finacle_acct_num,1,3) = sol_id ))  "
+		 print(sv_q)
+		sv_w=urhk_dbSelect(sv_q)
+		 print(sv_w)
+		if (sv_w == 0) then
+			BANCS.OUTPUT.fAccount = BANCS.OUTPARAM.finacle_acct_num
+		else
+			BANCS.OUTPUT.fAccount = BANCS.INPUT.uAccount
+			exitscript
+			sv_a=urhk_TBAF_DispMesg("Account does not exist") 
+		endif
+	endif
+	 print(BANCS.OUTPUT.fAccount)
+
+
+sv_q ="acct|select acct_num from CUSTOM.ACCOUNT_RESTRICT where acct_num = '" + BANCS.OUTPUT.fAccount + "' and bank_id = '"+ BANCS.STDIN.contextBankId +"'"
+print(sv_q) 
+sv_k = urhk_dbSelect(sv_q)
+print(sv_k)
+
+If (sv_k == 0) Then
+			sv_d = urhk_FTS_RaiseException("AC3")
+		print(sv_d)
+endif
+
+exitscript
+trace off
+end-->

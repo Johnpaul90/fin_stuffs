@@ -1,0 +1,442 @@
+<--start
+trace on
+sv_s = urhk_b2k_PrintRepos("BANCS")
+######################################################################################
+# Source Name : termtmn002.scr
+# Date: 01-02-2012
+# Description  : This script is called to validate the input data
+# Called Script  : None
+# Calling Script  : None
+# Author  : Abisola Badmus
+# Bank : FIRST BANK
+# Modification History       :
+# < Version No.> <Date> <Author Name>  <Description>
+#  0.1     01-FEB-2012  Abisola Badmus  Draft Version
+########################################################################################
+
+sv_a = REPEXISTS("CUST")
+if (sv_a == 0) then
+        CREATEREP("CUST")
+endif
+
+sv_a = CLASSEXISTS("CUST","TERMT")
+if (sv_a == 0) then
+        CREATECLASS("CUST", "TERMT", 5)
+endif
+
+IF (BANCS.STDIN.languageCode == "INFENG") THEN
+        CUST.TERMT.ERR000001 = "Database error"
+        CUST.TERMT.ERR000002 = "This ATM Term ID already exist!"
+        CUST.TERMT.ERR000003 = "This Term ID  is pending Addition Verification! Please Verify first."
+        CUST.TERMT.ERR000004 = "This Term ID is pending Modification Verification! Please Verify first."
+        CUST.TERMT.ERR000005 = "This Term ID is pending Deletion Verification! Please Verify first."
+        CUST.TERMT.ERR000006 = "This Term ID is pending Undeletion Verification! Please Verify first."
+        CUST.TERMT.ERR000007 = "ATM Till Account Not created! See FINCON for Account creation"
+        CUST.TERMT.ERR000008 = "ATM Fee Account Not created! See FINCON for Account creation"
+        CUST.TERMT.ERR000009 = "Record Added, but pending Verification"
+        CUST.TERMT.ERR000010 = "This Till Account has been assigned to Term ID : "
+        CUST.TERMT.ERR000011 = "This Fee Account has been assigned to Term ID : "
+        CUST.TERMT.ERR000012 = "Category Class for ATM machine Setup must be N"
+        CUST.TERMT.ERR000013 = "SOL ID Mismatch! Term ID SOL should tally with Till Account SOL."
+        CUST.TERMT.ERR000014 = "This Till Account is not meant for this Term ID !"
+        CUST.TERMT.ERR000015 = "This Fee Account is not meant for this Term ID !"
+        CUST.TERMT.ERR000016 = "!Valid Values for Cat Class are A, B, C or N"
+	CUST.TERMT.ERR000017 = "This  Term ID do not exist!"
+        CUST.TERMT.ERR000018 = "Addition of this Term Id is pending Verification!"
+        CUST.TERMT.ERR000019 = "Modification of this  Term ID is pending Verification!"
+        CUST.TERMT.ERR000020 = "Deletion of this  Term ID is pending Verification!"
+        CUST.TERMT.ERR000021 = "Undeletion of this  Term ID is pending Verification!"
+        CUST.TERMT.ERR000022 = "This Term ID has been Deleted!"
+        CUST.TERMT.ERR000023 = "SOL ID Mismatch! Term ID SOL should tally with Fee Account SOL."
+        CUST.TERMT.ERR000024 = "This Term ID has not been Deleted!"
+        CUST.TERMT.ERR000025 = "Same User Verification! You cannot Verify the same Term ID that you Added/Modified/Deleted/Undeleted."
+        CUST.TERMT.ERR000026 = "This Term ID does not exists, and need no Verification."
+	CUST.TERMT.ERR000035 = "Not a valid POS Till Account!"
+	CUST.TERMT.ERR000036 = "Category Class for POS machine Setup must be A, B, or C"
+	CUST.TERMT.ERR000037 = "The Amount U_Bound Cannot be Null."
+	CUST.TERMT.ERR000038 = "The Flat Rate Cannot be Null."
+	CUST.TERMT.ERR000039 = "The Percentage Cannot be Null."
+ENDIF
+
+CUST.TERMT.funcCode = BANCS.INPUT.funcCode
+print(CUST.TERMT.funcCode)
+CUST.TERMT.terminal = BANCS.INPUT.terminal
+print(CUST.TERMT.terminal)
+CUST.TERMT.termId = BANCS.INPUT.termId
+print(CUST.TERMT.termId)
+CUST.TERMT.tillacctNum  = BANCS.INPUT.tillacctNum
+print(CUST.TERMT.tillacctNum)
+CUST.TERMT.feeacctNum1 = BANCS.INPUT.feeacctNum1
+print(CUST.TERMT.feeacctNum1)
+CUST.TERMT.feeacctNum2 = BANCS.INPUT.feeacctNum2
+print(CUST.TERMT.feeacctNum2)
+CUST.TERMT.amtuBand = BANCS.INPUT.amtuBand
+print(CUST.TERMT.amtuBand)
+CUST.TERMT.flatRate = BANCS.INPUT.flatRate
+print(CUST.TERMT.flatRate)
+CUST.TERMT.catClass = BANCS.INPUT.catClass
+print(CUST.TERMT.catClass)
+CUST.TERMT.percent = BANCS.INPUT.percent
+print(CUST.TERMT.percent)
+
+###############################ATM_PROCESS################################################
+##########################################################################################
+#                        ATM PROCESS :function A                                         #
+##########################################################################################
+ATM_PROCESS:
+If ((CUST.TERMT.terminal == "ATM") and (CUST.TERMT.funcCode == "A")) then
+	BANCS.INPARAM.BINDVARS = CUST.TERMT.tillacctNum +"|"+ BANCS.STDIN.contextBankId
+	sv_m = "acct|SELECT Foracid FROM Gam"
+        sv_m = sv_m + " WHERE Foracid = ?SVAR and bank_id=?SVAR"
+        sv_m = sv_m + " And Gl_Sub_Head_Code In('10020')"
+        sv_m = sv_m + " And Rownum < 2"
+        print(sv_m)
+        sv_p = urhk_dbSelectWithBind(sv_m)
+        print(sv_p)
+        If (sv_p != 0) Then
+                sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+                sv_x = urhk_SetOrbOut("Error_1|ERR^" + CUST.TERMT.ERR000007 + "^tillacctNum")
+                GOTO END_OF_SCRIPT
+        Endif
+        If (Trim(CUST.TERMT.feeacctNum1) != "") Then
+		BANCS.INPARAM.BINDVARS = CUST.TERMT.feeacctNum1 +"|"+ BANCS.STDIN.contextBankId
+                sv_m = "acct|SELECT Foracid FROM Gam"
+                sv_m = sv_m + " WHERE Foracid = ?SVAR and bank_id=?SVAR"
+                sv_m = sv_m + " And Gl_Sub_Head_Code In('10021')"
+                sv_m = sv_m + " And Rownum < 2"
+                print(sv_m)
+                sv_p = urhk_dbSelectWithBind(sv_m)
+                print(sv_p)
+                If (sv_p != 0) Then
+                        sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+                        sv_x = urhk_SetOrbOut("Error_1|ERR^" + CUST.TERMT.ERR000008 + "^feeacctNum1")
+                        GOTO END_OF_SCRIPT
+                Endif
+        Endif
+        If (CUST.TERMT.catClass != "N") Then
+                sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+                sv_x = urhk_SetOrbOut("Error_1|ERR^" + CUST.TERMT.ERR000012 + "^catClass")
+                GOTO END_OF_SCRIPT
+        Endif
+	BANCS.INPARAM.BINDVARS = CUST.TERMT.tillacctNum +"|"+ BANCS.STDIN.contextBankId
+        sv_m = "v_TermID|Select Term_Id FROM tbaadm.terminal_table"
+        sv_m = sv_m + " WHERE Till_Acct_No = ?SVAR and bank_id=?SVAR and del_flg = 'N'"
+        sv_m = sv_m + " And Rownum < 2"
+	print(sv_m)
+        sv_p = urhk_dbSelectWithBind(sv_m)
+	print(sv_p)
+        If (sv_p == 0) Then
+                CUST.TERMT.termId = BANCS.OUTPARAM.v_TermID
+		print(CUST.TERMT.termId)
+                sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+                sv_x = urhk_SetOrbOut("Error_1|ERR^" + CUST.TERMT.ERR000010 + CUST.TERMT.termId +  "^tillacctNum")
+                GOTO END_OF_SCRIPT
+	Endif
+        If (Trim(CUST.TERMT.feeacctNum1) != "") Then
+		BANCS.INPARAM.BINDVARS = CUST.TERMT.feeacctNum1 +"|"+ BANCS.STDIN.contextBankId
+                sv_m = "v_TermID|Select Term_Id FROM tbaadm.terminal_table"
+                sv_m = sv_m + " WHERE Fee_Act_No1 = ?SVAR and bank_id=?SVAR and del_flg = 'N'"
+                sv_m = sv_m + " And Rownum < 2"
+		print(sv_m)
+                sv_p = urhk_dbSelectWithBind(sv_m)
+		print(sv_p)
+                If (sv_p == 0) Then
+			CUST.TERMT.termId = BANCS.OUTPARAM.v_TermID
+			print(CUST.TERMT.termId)
+                        sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+                        sv_x = urhk_SetOrbOut("Error_1|ERR^" + CUST.TERMT.ERR000011 +  CUST.TERMT.termId + "^feeacctNum1")
+                        GOTO END_OF_SCRIPT
+                Endif
+        Endif
+
+        print(Mid$(CUST.TERMT.termId, 4, 3))
+        print(Mid$(CUST.TERMT.tillacctNum, 0, 3))
+        #If (Trim(CUST.TERMT.tillacctNum) != "") Then
+        #        If (Mid$(CUST.TERMT.termId, 4, 3)  != Mid$(CUST.TERMT.tillacctNum, 0, 3)) Then
+        #                sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+        #                sv_x = urhk_SetOrbOut("Error_1|ERR^" + CUST.TERMT.ERR000013 + "^tillacctNum")
+        #                GOTO END_OF_SCRIPT
+        #        Endif
+        #
+        #        CUST.TERMT.TermStr = Mid$(CUST.TERMT.termId, 7, 1)
+        #        CUST.TERMT.AcctStr = Mid$(CUST.TERMT.tillacctNum, 8, 4)
+        #        print(CUST.TERMT.termId)
+        #        print(CUST.TERMT.tillacctNum)
+        #        print(CUST.TERMT.TermStr)
+        #        print(CUST.TERMT.AcctStr)
+		#		BANCS.INPARAM.BINDVARS = CUST.TERMT.TermStr +"|"+ CUST.TERMT.AcctStr
+        #        sv_m = "v_ValidAcct|Select ValidAcct(?SVAR, ?SVAR) From Dual"
+        #        print(sv_m)
+        #        sv_p = urhk_dbSelectWithBind(sv_m)
+        #        print(sv_p)
+        #        print(BANCS.OUTPARAM.v_ValidAcct)
+        #        If (BANCS.OUTPARAM.v_ValidAcct != "0") Then
+        #                sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+        #                sv_x = urhk_SetOrbOut("Error_1|ERR^" + CUST.TERMT.ERR000014 + "^tillacctNum")
+        #                GOTO END_OF_SCRIPT
+        #        Endif
+		#Endif
+
+        #If (Trim(CUST.TERMT.feeacctNum1) != "") Then
+        #        If (Mid$(CUST.TERMT.termId, 4, 3)  != Mid$(CUST.TERMT.tillacctNum, 0, 3)) Then
+        #                sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+        #                sv_x = urhk_SetOrbOut("Error_1|ERR^" + CUST.TERMT.ERR000013 + "^feeacctNum1")
+        #                GOTO END_OF_SCRIPT
+        #        Endif
+        #
+        #        CUST.TERMT.TermStr = Mid$(CUST.TERMT.termId, 7, 1)
+        #        CUST.TERMT.AcctStr = Mid$(CUST.TERMT.feeacctNum1, 8, 4)
+		#		BANCS.INPARAM.BINDVARS = CUST.TERMT.TermStr +"|"+ CUST.TERMT.AcctStr
+        #        sv_m = "v_ValidAcct|Select ValidAcct(?SVAR, ?SVAR) From Dual"
+        #        sv_p = urhk_dbSelectWithBind(sv_m)
+        #        print(sv_p)
+        #        print(BANCS.OUTPARAM.v_ValidAcct)
+        #        If (BANCS.OUTPARAM.v_ValidAcct != "0") Then
+        #                sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+        #                sv_x = urhk_SetOrbOut("Error_1|ERR^" + CUST.TERMT.ERR000015 + "^feeacctNum1")
+        #                GOTO END_OF_SCRIPT
+        #        Endif
+		#Endif
+Endif
+##########################################################################################
+#                       ATM PROCESS :function M                                          #
+##########################################################################################
+If (((CUST.TERMT.terminal == "ATM") and (CUST.TERMT.funcCode == "M"))  or ((CUST.TERMT.terminal == "POS") and (CUST.TERMT.funcCode == "M"))) then
+	sv_e = CUST.TERMT.tillacctNum
+        sv_f = CUST.TERMT.feeacctNum1
+        sv_g = CUST.TERMT.feeacctNum2
+        sv_h = CUST.TERMT.amtuBand
+        sv_i = CUST.TERMT.flatRate
+        sv_j =  CUST.TERMT.catClass
+        sv_k = CUST.TERMT.percent
+
+	If((sv_e != BANCS.INPUT.tillacctNum) Or (sv_f != BANCS.INPUT.feeacctNum1) Or (sv_j != BANCS.INPUT.catClass)) Then
+		#validate the new account number#
+		If (sv_e != Trim(BANCS.INPUT.tillacctNum)) Then
+			BANCS.INPARAM.BINDVARS = BANCS.INPUT.tillacctNum +"|"+ BANCS.STDIN.contextBankId
+			sv_m = "acct|SELECT Foracid FROM Gam"
+			sv_m = sv_m + " WHERE Foracid = ?SVAR and bank_id=?SVAR"
+			sv_m = sv_m + " And Gl_Sub_Head_Code In('10020')"
+			sv_m = sv_m + " And Rownum < 2"
+			print(sv_m)
+			sv_p = urhk_dbSelectWithBind(sv_m)
+			print(sv_p)
+			If (sv_p != 0) Then
+				sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+				sv_x = urhk_SetOrbOut("Error_1|ERR^" + CUST.TERMT.ERR000007 + "^tillacctNum")
+				GOTO END_OF_SCRIPT
+			Else
+				print(BANCS.OUTPARAM.acct)
+			Endif
+		Endif
+		
+		#Validate the New Fee Account
+		If ((sv_f != Trim(BANCS.INPUT.feeacctNum1)) And (Trim(BANCS.INPUT.feeacctNum1) != ""))Then
+			BANCS.INPARAM.BINDVARS = BANCS.INPUT.feeacctNum1 +"|"+ BANCS.STDIN.contextBankId
+			sv_m = "acct|SELECT Foracid FROM Gam"
+			sv_m = sv_m + " WHERE Foracid = ?SVAR and bank_id=?SVAR"
+			sv_m = sv_m + " And Gl_Sub_Head_Code In('10021')"
+			sv_m = sv_m + " And Rownum < 2"
+			print(sv_m)
+			sv_p = urhk_dbSelectWithBind(sv_m)
+			print(sv_p)
+			If (sv_p != 0) Then
+				sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+				sv_x = urhk_SetOrbOut("Error_1|ERR^" + CUST.TERMT.ERR000008 + "^feeacctNum1")
+				GOTO END_OF_SCRIPT
+			Else
+				print(BANCS.OUTPARAM.acct)
+			Endif
+		Endif
+		print(BANCS.INPUT.tillacctNum)
+		print(CUST.TERMT.termId)
+		BANCS.INPARAM.BINDVARS = BANCS.INPUT.tillacctNum +"|"+  CUST.TERMT.termId +"|"+ BANCS.STDIN.contextBankId
+		sv_m = "v_TermID|Select Term_Id FROM tbaadm.terminal_table"
+		sv_m = sv_m + " WHERE Till_Acct_No = Trim(?SVAR)"
+		sv_m = sv_m + " And Term_ID <> ?SVAR and bank_id=?SVAR and del_flg = 'N' "
+		sv_m = sv_m + " And Rownum < 2"
+		print(sv_m)
+		sv_p = urhk_dbSelectWithBind(sv_m)
+		print(sv_p)
+		If (sv_p == 0) Then
+			sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+			sv_x = urhk_SetOrbOut("Error_1|ERR^" + CUST.TERMT.ERR000010 + "^termId")
+			GOTO END_OF_SCRIPT
+		Endif
+		#------------------------------------------------------------------------------------------------
+		If (Trim(BANCS.INPUT.feeacctNum1) != "") Then
+			BANCS.INPARAM.BINDVARS = BANCS.INPUT.feeacctNum1 +"|"+  CUST.TERMT.termId +"|"+ BANCS.STDIN.contextBankId
+			sv_m = "v_TermID|Select Term_Id FROM tbaadm.terminal_table"
+			sv_m = sv_m + " WHERE Fee_Act_No1 = Trim(?SVAR)"
+			sv_m = sv_m + " And Term_ID <> ?SVAR and bank_id=?SVAR and del_flg = 'N'"
+			sv_m = sv_m + " And Rownum < 2"
+			print (sv_m)
+			sv_p = urhk_dbSelectWithBind(sv_m)
+			print(sv_p)
+			If (sv_p ==0) Then
+				sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+				sv_x = urhk_SetOrbOut("Error_1|ERR^" + CUST.TERMT.ERR000011 + "^termId")
+				GOTO END_OF_SCRIPT
+			Endif
+		Endif
+		#Validate the New Category ClassIfication
+		If (sv_j != BANCS.INPUT.catClass) Then
+			 if ((BANCS.INPUT.catClass != "A") or (BANCS.INPUT.catClass != "B") or (BANCS.INPUT.catClass != "C") or (BANCS.INPUT.catClass != "N") or (BANCS.INPUT.catClass == "")) Then
+				sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+				sv_x = urhk_SetOrbOut("Error_1|ERR^" + CUST.TERMT.ERR000016 + "^catClass")
+				GOTO END_OF_SCRIPT
+			Else
+				print(BANCS.INPUT.catClass)
+			Endif
+		Endif
+
+		If (BANCS.INPUT.catClass != "N") Then
+			sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+			sv_x = urhk_SetOrbOut("Error_1|ERR^" + CUST.TERMT.ERR000012 + "^catClass")
+			GOTO END_OF_SCRIPT
+		Endif
+
+		If (Trim(BANCS.INPUT.tillacctNum) == "") Then
+			sv_e = "Null"
+		Else
+			sv_e = "'" + BANCS.INPUT.tillacctNum + "'"
+		Endif
+		If (Trim(BANCS.INPUT.feeacctNum1) == "") Then
+			sv_f = "Null"
+		Else
+			sv_f = "'" + BANCS.INPUT.feeacctNum1 + "'"
+		Endif
+		If (Trim(BANCS.INPUT.feeacctNum2) == "") Then
+			sv_g = "Null"
+		Else
+			sv_g = "'" + BANCS.INPUT.feeacctNum2 + "'"
+		Endif
+		If (Trim(BANCS.INPUT.amtuBand) == "") Then
+			sv_h = "Null"
+		Else
+			sv_h = BANCS.INPUT.amtuBand
+		Endif
+		If (Trim(BANCS.INPUT.flatRate) == "") Then
+			sv_i = "Null"
+		Else
+			sv_i = BANCS.INPUT.flatRate
+		Endif
+		If (Trim(BANCS.INPUT.catClass) == "") Then
+			sv_j = "Null"
+		Else
+			sv_j = "'" + BANCS.INPUT.catClass + "'"
+		Endif
+		If (Trim(BANCS.INPUT.percent) == "") Then
+				sv_k = "Null"
+		Else
+			sv_k = BANCS.INPUT.percent
+		Endif
+
+		#If (Trim(BANCS.INPUT.tillacctNum) != "") Then
+		#	If (Mid$(BANCS.INPUT.termId, 4, 3)  != Mid$(BANCS.INPUT.tillacctNum, 0, 3)) Then
+		#		sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+		#		sv_x = urhk_SetOrbOut("Error_1|ERR^" + CUST.TERMT.ERR000013 + "^tillacctNum")
+		#		GOTO END_OF_SCRIPT
+		#	Endif
+		#CUST.TERMT.TermStr = Mid$(BANCS.INPUT.termId, 7, 1)
+		#	CUST.TERMT.AcctStr = Mid$(BANCS.INPUT.tillacctNum, 8, 4)
+		#	BANCS.INPARAM.BINDVARS = CUST.TERMT.TermStr +"|"+  CUST.TERMT.AcctStr 
+		#	sv_m = "v_ValidAcct|Select ValidAcct(?SVAR, ?SVAR) From Dual"
+		#	print(sv_m)
+		#	sv_p = urhk_dbSelectWithBind(sv_m)
+		#	print(sv_p)
+		#	print(BANCS.OUTPARAM.v_ValidAcct)
+		#	If (BANCS.OUTPARAM.v_ValidAcct != "0") Then
+		#		sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+		#		sv_x = urhk_SetOrbOut("Error_1|ERR^" + CUST.TERMT.ERR000014 + "^tillacctNum")
+		#		GOTO END_OF_SCRIPT
+		#	Endif
+		#Endif
+        #
+		##--------------------------------------------------------------------------------------------------
+		#If (Trim(BANCS.INPUT.feeacctNum1) != "") Then
+		#	If (Mid$(BANCS.INPUT.termId, 4, 3)  != Mid$(BANCS.INPUT.feeacctNum1, 0, 3)) Then
+		#		sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+		#		sv_x = urhk_SetOrbOut("Error_1|ERR^" + CUST.TERMT.ERR000023 + "^feeacctNum1")
+		#		GOTO END_OF_SCRIPT
+		#	Endif
+        #
+		#	CUST.TERMT.TermStr = Mid$(BANCS.INPUT.termId, 7, 1)
+		#	CUST.TERMT.AcctStr = Mid$(BANCS.INPUT.feeacctNum1, 8, 4)
+		#	BANCS.INPARAM.BINDVARS = CUST.TERMT.TermStr +"|"+  CUST.TERMT.AcctStr 
+		#	sv_m = "v_ValidAcct|Select ValidAcct?SVAR, ?SVAR) From Dual"
+		#	print(sv_m)
+		#	sv_p = urhk_dbSelectWithBind(sv_m)
+		#	print(sv_p)
+		#	print(BANCS.OUTPARAM.v_ValidAcct)
+		#	If (BANCS.OUTPARAM.v_ValidAcct != "0") Then
+		#		sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+		#		sv_x = urhk_SetOrbOut("Error_1|ERR^" + CUST.TERMT.ERR000015 + "^feeacctNum1")
+		#		GOTO END_OF_SCRIPT
+		#	Endif
+		#Endif
+	Endif
+ENDIF
+#########################################################################################
+
+#################################################################################
+###### Validation for POS########################################################
+
+if ((CUST.TERMT.terminal == "POS") and (CUST.TERMT.funcCode == "A")) then
+	BANCS.INPARAM.BINDVARS = CUST.TERMT.tillacctNum +"|"+ BANCS.STDIN.contextBankId
+	sv_m = "acct|SELECT Foracid FROM Gam"
+        sv_m = sv_m + " WHERE Foracid = ?SVAR and bank_id=?SVAR"
+        sv_m = sv_m + " And Rownum < 2"
+        print(sv_m)
+        sv_p = urhk_dbSelectWithBind(sv_m)
+        print(sv_p)
+        If (sv_p != 0) Then
+                sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+                sv_x = urhk_SetOrbOut("Error_1|ERR^" + CUST.TERMT.ERR000035 + "^tillacctNum")
+                GOTO END_OF_SCRIPT
+        Endif
+
+	if ((BANCS.INPUT.catClass != "A") or (BANCS.INPUT.catClass != "B") or (BANCS.INPUT.catClass != "C")) Then
+		sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+		sv_x = urhk_SetOrbOut("Error_1|ERR^" + CUST.TERMT.ERR000036 + "^catClass")
+		GOTO END_OF_SCRIPT
+	endif
+	If (Trim(CUST.TERMT.amtuBand) == "") Then
+		sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+		sv_x = urhk_SetOrbOut("Error_1|ERR^" + CUST.TERMT.ERR000037 + "^amtuBand")
+		GOTO END_OF_SCRIPT
+	Endif
+	If (Trim(CUST.TERMT.flatRate) == "") Then
+		sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+		sv_x = urhk_SetOrbOut("Error_1|ERR^" + CUST.TERMT.ERR000038 + "^flatRate")
+		GOTO END_OF_SCRIPT
+	Endif
+	If (Trim(CUST.TERMT.percent) == "") Then
+		sv_u = urhk_SetOrbOut("SuccessOrFailure|N")
+		sv_x = urhk_SetOrbOut("Error_1|ERR^" + CUST.TERMT.ERR000039 + "^percent")
+		GOTO END_OF_SCRIPT
+	Endif
+endif
+
+END_OF_SCRIPT:
+DELETECLASS("CUST","TERMT")
+
+ExitScript
+trace Off
+end-->
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

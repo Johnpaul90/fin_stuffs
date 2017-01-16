@@ -1,0 +1,99 @@
+<--Start
+trace On
+#=======================================================
+# Source Name:-   chqrd_det.scr
+# Date:-          23-01-2016
+# Description:-   
+# Author :-       Alpha - Plus, Lagos 
+#                 kevid 
+#=======================================================
+        sv_u = urhk_B2K_PrintRepos("BANCS")
+
+#rep & class 
+#-----------
+ 
+IF (REPEXISTS("CUST") == 0) THEN
+        CREATEREP("CUST")
+ENDIF
+IF (CLASSEXISTS("CUST", "CHQV") == 0) THEN
+        CREATECLASS("CUST", "CHQV", 5)
+ENDIF
+IF (CLASSEXISTS("CUST", "CHQ") == 0) THEN
+        CREATECLASS("CUST", "CHQ", 1)
+ENDIF
+
+ 
+IF (BANCS.STDIN.languageCode == "INFENG") THEN
+#{
+        CUST.CHQV.ERR000001 = "Cheque Re-Download Date cannot be empty"
+        CUST.CHQV.ERR000002 = "Enter a valid date format >> DD-MM-YYYY"
+		CUST.CHQV.ERR000003 = "No Cheque Indent to make ready for re - download"
+		CUST.CHQV.ERR000004 = "Cheque Indents now ready for re - download"
+         
+ENDIF
+IF (BANCS.STDIN.languageCode == "FRENCH") THEN
+#{
+        CUST.CHQV.ERR000001 = "Cheque retelechargez Date ne peut pas etre vide"
+        CUST.CHQV.ERR000002 = "Entrez un format de date valide. >> DD-MM-YYYY"
+		CUST.CHQV.ERR000003 = "Aucun cheque tiret pour rendre pret pour re - telecharger"
+		CUST.CHQV.ERR000004 = "Cheque tirets pret pour re - telecharger"
+ENDIF
+
+
+CUST.CHQV.termId = BANCS.INPUT.termId
+print(CUST.CHQV.termId)
+
+CUST.CHQV.bankId = BANCS.STDIN.contextBankId
+
+                # Ensure date input is not empty
+				#============================================
+				print(CUST.CHQV.termId )
+				if (CUST.CHQV.termId == "") then
+				   	sv_o = urhk_SetOrbOut("SuccessOrFailure|N")
+				    sv_b = urhk_SetOrbOut("Error_1|ERR^" + CUST.CHQV.ERR000001 + "^termId")
+					goto finish
+				endif
+				
+				# confirm date input is a valid date
+				#==========================================
+				sv_m = "test1,test2|select substr('" + CUST.CHQV.termId + "',3,1), substr('" + CUST.CHQV.termId + "',6,1) from dual"
+				print(sv_m)
+				sv_p = urhk_dbSelect(sv_m)
+				if (sv_p != 0) then
+					goto finish
+				endif
+				
+				CUST.CHQV.test1 = BANCS.OUTPARAM.test1
+				CUST.CHQV.test2 = BANCS.OUTPARAM.test2
+				
+				if((CUST.CHQV.test1 != "-") AND (CUST.CHQV.test2 != "-")) then
+					sv_o = urhk_SetOrbOut("SuccessOrFailure|N")
+				    sv_b = urhk_SetOrbOut("Error_1|ERR^" + CUST.CHQV.ERR000002 + "^termId")
+					goto finish
+				endif
+			 
+				 		
+				# Change Datepulled = "N" >>  making available for re-download
+				#==========================================
+				
+				sv_v = "update icms.indents  set PULLED = 'N'  where bank_id = '" + CUST.CHQV.bankId  + "'"
+				sv_v = sv_v + "   and  DATEPULLED = to_date('" + CUST.CHQV.termId + "' , 'DD-MM-YYYY')"
+				print(sv_v)
+				
+				sv_u = urhk_dbSQL(sv_v)
+				print(sv_u)
+				if (sv_u != 0) then
+				    sv_o = urhk_SetOrbOut("SuccessOrFailure|N")
+				    sv_b = urhk_SetOrbOut("Error_1|ERR^" + CUST.CHQV.ERR000003 + "^termId")
+					goto finish
+				endif
+				
+				sv_k = urhk_dbSQL("commit") 
+				
+				sv_n = CUST.CHQV.termId +  ": " + CUST.CHQV.ERR000004
+				sv_u = urhk_SetOrbOut("SuccessOrFailure|Y")
+                sv_u = urhk_SetOrbOut("RESULT_MSG|" + sv_n )
+finish:
+exitscript
+trace off
+end-->

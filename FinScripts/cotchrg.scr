@@ -1,0 +1,100 @@
+<--START
+TRACE ON
+
+
+sv_a = urhk_b2k_PrintRepos("BANCS")
+
+sv_b = REPEXISTS("COT")
+	IF (sv_b != 1) THEN
+	#{
+		CREATEREP("COT")
+	#}
+	ENDIF
+	
+	sv_b = CLASSEXISTS("COT","CHRG")
+	IF (sv_b != 1) THEN
+	#{
+		CREATECLASS("COT","CHRG",5)
+	#}
+	ENDIF
+	
+	
+	
+	sv_c = 0.001
+	
+	COT.CHRG.MYSOL = BANCS.STDIN.mySolId
+	COT.CHRG.boddate = mid$(BANCS.STDIN.BODDate,0,10)
+	COT.CHRG.BANK_ID =BANCS.STDIN.contextBankId
+	
+	
+	#Get transaction details from DB
+	sv_d = " acid, tran_date, tran_amt | select acid, tran_date, SUM(tran_amt) " 
+	sv_d = sv_d + "from tbaadm.dtd where tran_type = 'C' and part_tran_type = 'D'"
+	sv_d = sv_d + " and bank_id='"+BANCS.STDIN.contextBankId+"' and tran_date = to_date('"+ COT.CHRG.boddate +"','dd-mm-yyyy')"
+	sv_d = sv_d + " GROUP BY acid, tran_date"
+	PRINT(sv_d)
+	
+	sv_e = urhk_dbCursorOpen(sv_d)
+	
+	IF (sv_e != 0) THEN
+	#{
+		EXITSCRIPT
+	#}
+	ELSE
+	
+	sv_f = BANCS.OUTPARAM.DB_CURSOR_NUMBER
+	sv_g = urhk_cursorFetch(sv_f)
+	
+	
+	#Iterate through the fetched Tran_Amt and apply COT of 1/1000
+	
+	WHILE( sv_g == 0)
+	sv_h = CDOUBLE(BANCS.OUTPARAM.tran_amt)
+	PRINT(sv_h)
+	COT.CHRG.ACID = BANCS.OUTPARAM.acid
+	COT.CHRG.AMOUNT = sv_c * sv_h
+	PRINT(COT.CHRG.AMOUNT )
+	COT.CHRG.TRANDATE = BANCS.OUTPARAM.tran_date
+	PRINT(COT.CHRG.TRANDATE)
+	
+	
+	sv_z = " foracid | select foracid from tbaadm.gam where acid = '"+ COT.CHRG.ACID +"'"
+	sv_z = sv_z + " and bank_id = '"+BANCS.STDIN.contextBankId+"' and sol_id = '"+COT.CHRG.MYSOL+"'"
+	PRINT(sv_z)
+	sv_u = urhk_dbSelectWithBind(sv_z)
+	PRINT(sv_u)
+	COT.CHRG.FORACID = BANCS.OUTPARAM.foracid
+	PRINT(COT.CHRG.FORACID)
+	
+	
+	
+	#INSERT 1/1000 OF TRAN_AMT IN CUSTOM TABLE
+	sv_i ="INSERT INTO CUSTOM.COT_CHRG_TBL ( TRAN_DATE, ACID, FORACID, TRAN_AMT, SOL_ID, BANK_ID )
+	sv_i = sv_i + " VALUES ('" + COT.CHRG.TRANDATE + "','"
+	sv_i = sv_i + COT.CHRG.ACID + "','"
+	sv_i = sv_i + COT.CHRG.FORACID + "','"
+	sv_i = sv_i + COT.CHRG.AMOUNT + "','"
+	sv_i = sv_i + COT.CHRG.MYSOL + "','"
+	sv_i = sv_i + BANCS.STDIN.contextBankId + "')"
+	
+	
+	PRINT(sv_i)
+	sv_j = urhk_dbSQL(sv_i)
+	PRINT(sv_j)
+	sv_k = urhk_dbSQL("commit")
+
+	DO
+	sv_x = urhk_cursorClose(sv_f)
+	PRINT(sv_x)
+	
+	ENDIF
+	
+	
+	#sv_h = "exebatch babx4061 0 cotchrg2.scr "+COT.CHRG.MYSOL+" "+COT.CHRG.BANK_ID+" "
+	#PRINT(sv_h)
+	#sv_z = system(sv_h)
+	#PRINT(sv_z)
+	
+	TRACE OFF
+
+END-->
